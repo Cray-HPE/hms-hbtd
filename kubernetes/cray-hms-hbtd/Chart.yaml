@@ -1,0 +1,5 @@
+apiVersion: v1
+description: "Kubernetes resources for cray-hms-hbtd"
+name: "cray-hms-hbtd"
+home: "HMS/hms-hbtd"
+version: 1.8.0
