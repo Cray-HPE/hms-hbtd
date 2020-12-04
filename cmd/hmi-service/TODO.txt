@@ -1,0 +1,37 @@
+ o Dockerize. (Q4)
+
+ o Add into DST pipeline.
+
+ o API gateway (Q4)
+
+ o Secure, https, etc. (Q4)
+
+ o Add code to dump onto the telemetry bus (Q4 +)
+
+ o Use standard .ini file parsing stuff or KV store (when?)
+
+ o Add code to connect to Kafka bus
+
+Possible performance improvements:
+
+ o Use a GO routine per SM PATCH rather than one GO routine with
+   a queue of operations.
+
+ o If a single GO routine is to be used, re-use the http.NewRequest() and/or
+   the http.Client between calls.
+
+Notes:
+
+ o How do we know if a node is supposed to lose heartbeats (don't send
+   any notification)?  Do nodes send a special value stating "I'm going
+   down"?  Or, do agents that send shutdown notifications also tell the
+   HB tracker to stop tracking?  That seems onerous.
+
+   The former seems better.  But this means that this HB tracker has to 
+   interpret special "status" text patterns.  Maybe this is OK?
+
+ o Do we want to boot-track?  If so, we need to listen for SCNs for when
+   nodes are starting to boot.  Puts more load on SM, but only one more
+   client.
+
+

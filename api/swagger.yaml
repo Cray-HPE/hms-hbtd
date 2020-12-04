@@ -1,0 +1,663 @@
+openapi: 3.0.0
+info:
+  description: >-
+    The Heartbeat Tracker Service transfers basic node health, service state,
+    and configuration information between compute nodes and the Hardware State
+    Manager (HSM). The API tracks the heartbeats emitted by various system
+    components. Generally, compute nodes emit heartbeats to inform the HSM that
+    they are alive and healthy. Other components can also emit heartbeats if
+    they so choose. An operating system developer may call this API to track a
+    hardware component heartbeat. There is no Command Line (CLI) for the Heartbeat Tracker
+    Service.
+
+    The compute nodes send heartbeats after every 3 seconds (by default) to the
+    Heartbeat Tracker Service. The Heartbeat Tracker Service resides on the
+    Non-Compute Node (NCN). It tracks the heartbeats received for a given
+    component and checks them against the previous heartbeat.
+
+
+    Changes in heartbeat behavior are communicated to the Hardware State Manager
+    in the following way:
+
+    * First time heartbeat received (HSM places the component in READY state)
+
+    * Heartbeat missing - If no further heartbeats arrive after the currently
+    configured warning time interval, the component may be dead (HSM places the
+    component in READY state with a WARNING flag). If configured to do so, this
+    information is also dumped onto the HMS telemetry bus.
+
+    * Heartbeat missing - If still no further heartbeats arrive after the
+    currently configured alert time interval, component is dead (HSM places
+    component in STANDBY state with an ALERT flag). If configured to do so, this
+    information is also dumped onto the HMS telemetry bus.
+
+
+     This is a service to service communication.
+    ## Resources
+
+    ### /heartbeat
+
+    Send a heartbeat message from a compute node to the heartbeat tracker
+    service. Heartbeat status changes like heartbeat starts or stops, are
+    communicated to the HSM.
+
+    ### /hbstates
+
+    Query the service for for the current heartbeat status of requested
+    components.
+
+    ### /params
+
+    Query and modify service operating parameters.
+
+    ### /health
+
+    Retrieve health information for the service and its dependencies.
+
+    ## Workflow
+
+    ### Send Heartbeat Status from a Component
+
+    #### POST /heartbeat
+
+    Send a heartbeat message to the heartbeat tracker service with a JSON
+    formatted payload. If it's the first heartbeat, it will send a
+    heartbeat-started message to the HSM and inform that the component is alive.
+    Keep sending them periodically (say, every 10 seconds) to continue to have
+    an "alive" state. If the heartbeats for a given component stop, the
+    heartbeat tracker service will send a heartbeat-stopped message to HSM with
+    a warning ("node might be dead") followed later by a heartbeat-stopped
+    message to HSM with an alert ("node is dead").
+
+    ### Query Heartbeat Status of Requested Components
+
+    #### POST /hbstates
+
+    Sends a list of components to the service in a JSON formatted payload.
+    The service will respond with a JSON payload containing the same list of
+    components, each with their XName and Heartbeating status.
+
+    #### GET /hbstate/{xname}
+
+    Query the service for the heartbeat status of a single component.  The
+    service will respond with a JSON formatted payload containing the requested
+    component XName and Heartbeating status.
+
+    ### Retrieve and Modify Operational Parameters
+
+    #### GET /params
+
+    Retrieve current operational parameters.
+
+    #### PATCH /params
+
+    To change a parameter, perform a PATCH operation with a JSON-formatted
+    payload containing the parameter(s) to be changed along with their new
+    values. For example, you can set the debug level to 2. Debug parameter
+    increases the verbosity of logging.
+  version: "1.0.0-oas3"
+  title: Heartbeat Tracker Service
+paths:
+  /heartbeat:
+    post:
+      summary: Send a heartbeat message
+      tags:
+        - heartbeat
+      description: >-
+        Send a heartbeat message from a managed component like compute node to
+        the heartbeat tracker service. To do so, a JSON object that contains the
+        heartbeat information is sent to the heartbeat tracker service. Changes
+        in heartbeat behavior are communicated to the Hardware State Manager.
+      operationId: TrackHeartbeat
+      responses:
+        '200':
+          $ref: '#/components/responses/status_200'
+        '400':
+          $ref: '#/components/responses/status_hb_400'
+        '401':
+          $ref: '#/components/responses/status_401'
+        '404':
+          $ref: '#/components/responses/status_404'
+        '405':
+          $ref: '#/components/responses/status_hb_405'
+        default:
+          description: Unexpected error
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/heartbeat'
+        required: true
+  /hbstates:
+    post:
+      summary: Query the service for heartbeat status of requested components
+      tags:
+        - hbstates
+      description: >-
+        Sends a list of components to the service in a JSON formatted payload.
+        The service will respond with a JSON payload containing the same list of
+        components, each with their XName and Heartbeating status.
+      operationId: GetHBStates
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/hbstates'
+        required: true
+      responses:
+        '200':
+          description: OK.  The operation was successful and a payload was returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/hbstates_rsp'
+        '400':
+          $ref: '#/components/responses/status_hb_400'
+        '401':
+          $ref: '#/components/responses/status_401'
+        '404':
+          $ref: '#/components/responses/status_404'
+        '405':
+          $ref: '#/components/responses/status_hbstates_405'
+        default:
+          description: Unexpected error
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/Error'
+  '/hbstate/{xname}':
+    parameters:
+      - in: path
+        name: xname
+        required: true
+        schema:
+          $ref: '#/components/schemas/XName.1.0.0'
+    get:
+      tags:
+        - hbstates
+      summary: Query the service for the heartbeat status of a single component.
+      description: >-
+        Query the service for the heartbeat status of a single component.  The
+        service will respond with a JSON formatted payload containing the 
+        requested component XName and heartbeating status.
+      responses:
+        '200':
+          description: OK.  The data was succesfully retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/hbstates_single_rsp' # ZZZ
+        '404':
+          $ref: '#/components/responses/status_404'
+        '405':
+          $ref: '#/components/responses/status_hbstate_405'
+  /params:
+    get:
+      summary: Retrieve heartbeat tracker parameters
+      tags:
+        - params
+      description: Fetch current heartbeat tracker configurable parameters.
+      responses:
+        '200':
+          $ref: '#/components/responses/status_param_200'
+        '400':
+          $ref: '#/components/responses/status_pm_400'
+        '401':
+          $ref: '#/components/responses/status_401'
+        '404':
+          $ref: '#/components/responses/status_404'
+        '405':
+          $ref: '#/components/responses/status_param_405'
+        '500':
+          $ref: '#/components/responses/status_500'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    patch:
+      summary: Update heartbeat tracker parameters
+      tags:
+        - params
+      description: >-
+        Set one or more configurable parameters for the heartbeat tracker
+        service and have them take effect immediately, without restarting the
+        service.
+      responses:
+        '200':
+          $ref: '#/components/responses/status_param_200'
+        '400':
+          $ref: '#/components/responses/status_pm_400'
+        '401':
+          $ref: '#/components/responses/status_401'
+        '404':
+          $ref: '#/components/responses/status_404'
+        '405':
+          $ref: '#/components/responses/status_param_405'
+        '500':
+          $ref: '#/components/responses/status_500'
+        default:
+          description: Unexpected error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/params'
+        required: true
+
+  /health:
+    get:
+      tags:
+        - health
+      summary: Query the health of the service
+      description: >-
+        The `health` resource returns health information about the heartbeat
+        tracker service and its dependencies.  This actively checks the 
+        connection between the heartbeat tracker service and the following:
+          * KV Store
+          * Message Bus
+          * Hardware State Manager
+
+
+        This is primarily intended as a diagnostic tool to investigate the
+        functioning of the heartbeat tracker service.
+      responses:
+        '200':
+          description: >-
+            [OK](http://www.w3.org/Protocols/rfc2616/rfc2616-sec10.html#sec10.2.1)
+            Network API call success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  KvStore:
+                    description: Status of the KV Store.
+                    type: string
+                  MsgBus:
+                    description: Status of the connection with the message bus.
+                    type: string
+                  HsmStatus:
+                    description: Status of the connection to the Hardware State
+                      Manager (HSM).  Any error reported by an attempt to access
+                      the HSM will be included here.
+                    type: string
+                example:
+                  KvStore: 'KV Store not initialized'
+                  MsgBus: 'Connected and OPEN'
+                  HsmStatus: 'Ready'
+                required:
+                  - KvStore
+                  - MsgBus
+                  - HsmStatus
+        '405':
+          description: >-
+            Operation Not Permitted.  For /health, only GET operations are allowed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem7807'
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem7807'
+
+  /liveness:
+    get:
+      tags:
+        - health
+      summary: Kubernetes liveness endpoint to monitor service health
+      x-private: true
+      description: >-
+        The `liveness` resource works in conjunction with the Kubernetes liveness
+        probe to determine when the service is no longer responding to
+        requests.  Too many failures of the liveness probe will result in the
+        service being shut down and restarted.  
+
+
+        This is primarily an endpoint for the automated Kubernetes system.
+      responses:
+        '204':
+          description: >-
+            [No Content](http://www.w3.org/Protocols/rfc2616/rfc2616-sec10.html#sec10.2.5)
+            Network API call success
+        '405':
+          description: >-
+            Operation Not Permitted.  For /liveness, only GET operations are allowed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem7807'
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem7807'
+
+  /readiness:
+    get:
+      tags:
+        - health
+      summary: Kubernetes readiness endpoint to monitor service health
+      x-private: true
+      description: >-
+        The `readiness` resource works in conjunction with the Kubernetes readiness
+        probe to determine when the service is no longer healthy and able to respond
+        correctly to requests.  Too many failures of the readiness probe will result
+        in the traffic being routed away from this service and eventually the service
+        will be shut down and restarted if in an unready state for too long.
+
+
+        This is primarily an endpoint for the automated Kubernetes system.
+      responses:
+        '204':
+          description: >-
+            [No Content](http://www.w3.org/Protocols/rfc2616/rfc2616-sec10.html#sec10.2.5)
+            Network API call success
+        '405':
+          description: >-
+            Operation Not Permitted.  For /readiness, only GET operations are allowed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem7807'
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem7807'
+servers:
+  - url: http://cray-hbtd/hmi/v1
+    description: Access URL when you are inside the service mesh
+  - url: https://api-gw-service-nmn.local/apis/hbtd/hmi/v1
+    description: Access URL when you are outside the service mesh
+components:
+  responses:
+    status_200:
+      description: |
+        Success
+      content:
+        '*/*':
+          schema:
+            $ref: '#/components/schemas/Error'
+    status_param_200:
+      description: Current heartbeat service operational parameter values
+      content:
+        '*/*':
+          schema:
+            $ref: '#/components/schemas/params'
+    status_hb_400:
+      description: >
+        Bad Request. Malformed JSON.  Verify all JSON formatting in payload.
+        Verify that the xname/NID/hostname is properly set. 
+    status_pm_400:
+      description: |
+        Bad Request. Malformed JSON.  Verify all JSON formatting in payload.
+      content:
+        '*/*':
+          schema:
+            $ref: '#/components/schemas/Error'
+    status_401:
+      description: >
+        Unauthorized. RBAC and/or authenticated token does not allow calling
+        this method.  Check the authentication token expiration.  Verify that
+        the RBAC information is correct.
+      content:
+        '*/*':
+          schema:
+            $ref: '#/components/schemas/Error'
+    status_404:
+      description: >-
+        Not Found. Endpoint not available. Check IP routing between managed and
+        management plane. Check that any SMS node services are running on
+        management plane. Check that SMS node API gateway service is running on
+        management plane. Check that SMS node HMI service is running on
+        management plane.
+      content:
+        '*/*':
+          schema:
+            $ref: '#/components/schemas/Error'
+    status_hb_405:
+      description: >-
+        Operation not permitted.  For /heartbeat, only POST operations are
+        allowed.
+      content:
+        '*/*':
+          schema:
+            $ref: '#/components/schemas/Error'
+    status_param_405:
+      description: >-
+        Operation not permitted.  For /params, only PATCH and GET operations are
+        allowed.
+      content:
+        '*/*':
+          schema:
+            $ref: '#/components/schemas/Error'
+    status_hbstates_405:
+      description: >-
+        Operation not permitted.  For /hbstates, only POST operations are
+        allowed.
+      content:
+        '*/*':
+          schema:
+            $ref: '#/components/schemas/Error'
+    status_hbstate_405:
+      description: >-
+        Operation not permitted.  For /hbstate/{xname}, only GET operations are
+        allowed.
+      content:
+        '*/*':
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    status_500:
+      description: >-
+        Internal Server Error.  Unexpected condition encountered when processing
+        the request.
+  schemas:
+    heartbeat:
+      title: Heartbeat Message
+      type: object
+      description: This is the JSON payload that describes a heartbeat message.
+      properties:
+        Component:
+          $ref: '#/components/schemas/XName.1.0.0'
+        Hostname:
+          $ref: '#/components/schemas/Hostname.1.0.0'
+        NID:
+          $ref: '#/components/schemas/NID.1.0.0'
+        Status:
+          $ref: '#/components/schemas/HeartbeatStatus.1.0.0'
+        TimeStamp:
+          $ref: '#/components/schemas/TimeStamp.1.0.0'
+      required:
+        - Component
+        - Status
+        - TimeStamp
+    hbstates:
+      title: Heartbeat Status Query
+      type: object
+      description: This is the JSON payload containing components for heartbeat status queries.
+      properties:
+        XNames:
+          description: >-
+              List of component XNames to query for heartbeat status.
+          type: array
+          items:
+            $ref: '#/components/schemas/XName.1.0.0'
+    hbstates_rsp:
+      title: Heartbeat Status Query Response
+      type: object
+      description: This is the JSON payload containing requested components' heartbeat status.
+      properties:
+        HBStates:
+          description: >-
+            List of components' heartbeat status.
+          type: array
+          items:
+            $ref: '#/components/schemas/hbstates_single_rsp'
+    hbstates_single_rsp:
+      title: Heartbeat Status for a Component
+      type: object
+      description: >-
+        Contains the heartbeat status of an individual component.
+      properties:
+        XName:
+          description: XName of a component
+          type: string
+          example: 'x0c0s0b0n0'
+        Heartbeating:
+          description: Signifies if a component is actively heartbeating.
+          type: boolean
+          example: true
+    params:
+      title: Operational Parameters Message
+      type: object
+      description: This is the JSON payload that contains heartbeat service parameters.
+      properties:
+        Debug:
+          description: >-
+            This is the debug level of the heartbeat service. Debug parameter
+            increases the verbosity of the logging.
+          type: string
+          default: '0'
+          example: '0'
+        Errtime:
+          description: >-
+            This is the timeout interval resulting in a missing heartbeat error.
+            Allows you to change the max time elapsed since the last heatbeat
+            received by a component before sending an ALERT to the HSM.
+          type: string
+          default: '30'
+          example: '10'
+        Warntime:
+          description: >-
+            This is the timeout interval resulting in a missing heartbeat
+            warning. Allows you to change the max time elapsed since last
+            heartbeat received by a component before sending a WARNING to the
+            State Manager.
+          type: string
+          default: '10'
+          example: '5'
+        Kv_url:
+          description: This is the URL of a Key/Value store service.
+          type: string
+          default: 'https://localhost:2379'
+          example: 'http://cray-hbtd-etcd-client:2379'
+        Interval:
+          description: This is the time interval between heartbeat checks (in seconds).
+          type: string
+          default: '5'
+          example: '5'
+        Nosm:
+          description: This enables/disables actual State Manager interaction.
+          type: string
+          default: '0'
+          example: '0'
+        Port:
+          description: This is the port the heartbeat service listens on.
+          type: string
+          readOnly: true
+          default: '28500'
+          example: '8080'
+        Sm_retries:
+          description: >-
+            This is the number of times to retry failed State Manager
+            interactions.
+          type: string
+          default: '3'
+          example: '3'
+        Sm_timeout:
+          description: >-
+            This is max time (in seconds) to wait for a response from the HSM in
+            any given interaction.
+          type: string
+          default: '10'
+          example: '5'
+        Sm_url:
+          description: This is the State Manager URL
+          type: string
+          default: 'http://localhost:27779/hsm/v1'
+          example: 'http://cray-smd/v1/State/Components'
+        Telemetry_host:
+          description: 'Telemetry bus host description (host:port:topic)'
+          type: string
+          example: '10.2.3.4:9092:heartbeat_notifications'
+        Use_telemetry:
+          description: >-
+            Turn on or off the ability to dump notifications of heartbeat state
+            changes to the telemetry bus. If non-zero dump heartbeat change
+            notifications onto the telemetry bus.
+          type: string
+          default: '1'
+          example: '1'
+    XName.1.0.0:
+      description: >-
+        Identifies sender by xname. This is the physical, location-based name of
+        a component.
+      type: string
+      example: x0c1s2b0n3
+    Hostname.1.0.0:
+      description: Identifies sender by hostname. This is the host name of a component.
+      type: string
+      example: x0c1s2b0n3.us.cray.com
+    NID.1.0.0:
+      description: >-
+        Identifies sender by Numeric ID (NID). This is the Numeric ID of a
+        compute node.
+      type: string
+      example: '83'
+    TimeStamp.1.0.0:
+      description: When heartbeat was sent. This is an ISO8601 formatted time stamp.
+      type: string
+      example: '2018-07-06T12:34:56.012345-5Z'
+    HeartbeatStatus.1.0.0:
+      description: Special status field for specific failure modes.
+      type: string
+      example: Kernel Oops
+    Error:
+      description: >-
+        RFC 7807 compliant error payload.  All fields are optional except the
+        'type' field.
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+        detail:
+          type: string
+        instance:
+          type: string
+        status:
+          type: string
+        title:
+          type: string
+    Problem7807:
+      description: >-
+        RFC 7807 compliant error payload.  All fields are optional except the
+        'type' field.
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          example: 'about:blank'
+        detail:
+          type: string
+          example: Detail about this specific problem occurrence. See RFC7807
+        instance:
+          type: string
+          example: ''
+        status:
+          type: number
+          format: int32
+          example: 400
+        title:
+          type: string
+          example: 'Description of HTTP Status code, e.g. 400'
