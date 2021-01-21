@@ -99,7 +99,7 @@ google.golang.org/grpc/credentials/internal
 google.golang.org/grpc/balancer/base
 google.golang.org/grpc/binarylog/grpc_binarylog_v1
 google.golang.org/grpc/internal/syscall
-# stash.us.cray.com/HMS/hms-base v1.8.1
+# stash.us.cray.com/HMS/hms-base v1.11.1
 stash.us.cray.com/HMS/hms-base
 # stash.us.cray.com/HMS/hms-hmetcd v1.7.0
 stash.us.cray.com/HMS/hms-hmetcd
