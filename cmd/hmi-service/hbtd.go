@@ -929,8 +929,8 @@ func main() {
 
 	serviceName, err = base.GetServiceInstanceName()
 	if err != nil {
-		log.Printf("ERROR: can't get service/host name!  Using 'localhost'.\n")
-		serviceName = "localhost"
+		log.Printf("ERROR: can't get service/host name!  Using 'HBTD'.\n")
+		serviceName = "HBTD"
 	}
 	log.Printf("Service name: '%s'",serviceName)
 
