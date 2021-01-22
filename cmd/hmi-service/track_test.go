@@ -1,4 +1,24 @@
-// Copyright 2018-2020 Hewlett Packard Enterprise Development LP
+// MIT License
+// 
+// (C) Copyright [2018-2021] Hewlett Packard Enterprise Development LP
+// 
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom the
+// Software is furnished to do so, subject to the following conditions:
+// 
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+// 
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+// OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+// OTHER DEALINGS IN THE SOFTWARE.
 
 
 package main
@@ -907,7 +927,22 @@ func getSMRVal() int {
     return val
 }
 
+var gotUAHdr bool
+
+func hasUserAgentHeader(r *http.Request) bool {
+    if (len(r.Header) == 0) {
+        return false
+    }
+
+    _,ok := r.Header["User-Agent"]
+    if (!ok) {
+        return false
+    }
+    return true
+}
+
 func fakeHSMHandler(w http.ResponseWriter, req *http.Request) {
+    gotUAHdr = hasUserAgentHeader(req)
     w.WriteHeader(getSMRVal())
 }
 
@@ -926,6 +961,7 @@ func TestSMPatch1(t *testing.T) {
 	                                                 Flag: "OK",},}
 
 	srv := httptest.NewServer(http.HandlerFunc(fakeHSMHandler))
+	serviceName = "HBTDTest"
 
 	app_params.statemgr_url.string_param = srv.URL
 	app_params.nosm.int_param = 0
@@ -949,6 +985,7 @@ func TestSMPatch1(t *testing.T) {
 
 	//Run with 404 returns.  This should take 3 retries.
 
+	gotUAHdr = false
 	t.Log("Running 404-path send_sm_req test")
 	setSMRVal(http.StatusNotFound)
 	hsmQ <- smjinfo
@@ -960,6 +997,9 @@ func TestSMPatch1(t *testing.T) {
 	time.Sleep(5 * time.Second)
 	if (len(hsmQ) != 0) {
 		t.Errorf("ERROR: send_sm_req() didn't consume 404-path request correctly (too slow).")
+	}
+	if (!gotUAHdr) {
+		t.Errorf("ERROR, never saw User-Agent header.")
 	}
 	time.Sleep(5 * time.Second)
 
