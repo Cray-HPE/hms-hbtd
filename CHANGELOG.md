@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.0] - 2021-02-02
+
+### Changed
+
+- Updated License files to MIT License
 
 ## [1.9.1] - 2021-01-21
 
@@ -52,7 +57,7 @@ upgraded to support Helm v3
 
 ## [1.6.0] - 2020-06-26
 
-- Bumped the base chart to 1.11.1 for ETCD improvements. Updated istio pod annotation to exclude ETCD. 
+- Bumped the base chart to 1.11.1 for ETCD improvements. Updated istio pod annotation to exclude ETCD.
 
 ## [1.5.3] - 2020-06-12
 
