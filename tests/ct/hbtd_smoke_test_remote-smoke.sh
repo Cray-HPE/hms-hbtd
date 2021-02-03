@@ -1,6 +1,26 @@
 #!/bin/bash -l
 #
-# Copyright 2020 Hewlett Packard Enterprise Development LP
+# MIT License
+#
+# (C) Copyright [2018-2021] Hewlett Packard Enterprise Development LP
+#
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included
+# in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+# THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+# OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+# ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+# OTHER DEALINGS IN THE SOFTWARE.
 #
 ###############################################################
 #
@@ -11,7 +31,7 @@
 #     DESCRIPTION       : Automated test for verifying basic HBTD API
 #                         infrastructure and installation on Cray Shasta
 #                         systems.
-#                         
+#
 #     AUTHOR            : Mitch Schooler
 #
 #     DATE STARTED      : 09/23/2020
@@ -25,7 +45,7 @@
 #
 #     INPUT SPECIFICATIONS
 #       Usage: hbtd_smoke_test
-#       
+#
 #       Arguments: None
 #
 #     OUTPUT SPECIFICATIONS
@@ -35,7 +55,7 @@
 #     DESIGN DESCRIPTION
 #       This smoke test is based on the Shasta health check srv_check.sh
 #       script in the CrayTest repository that verifies the basic health of
-#       various microservices but instead focuses exclusively on the HBTD 
+#       various microservices but instead focuses exclusively on the HBTD
 #       API. It was implemented to run from the ct-pipelines container off
 #       of the NCN of the system under test within the DST group's Continuous
 #       Testing (CT) framework as part of the remote-smoke test suite.
