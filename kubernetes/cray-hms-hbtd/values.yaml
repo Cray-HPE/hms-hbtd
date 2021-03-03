@@ -41,7 +41,7 @@ cray-service:
         - name: SM_URL
           value: "http://cray-smd/hsm/v1"
         - name: WARNTIME
-          value: "20"
+          value: "35"
         - name: ERRTIME
           value: "60"
       livenessProbe:
