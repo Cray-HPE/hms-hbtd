@@ -2,7 +2,7 @@
 #
 # MIT License
 #
-# (C) Copyright [2018-2021] Hewlett Packard Enterprise Development LP
+# (C) Copyright [2020-2021] Hewlett Packard Enterprise Development LP
 #
 # Permission is hereby granted, free of charge, to any person obtaining a
 # copy of this software and associated documentation files (the "Software"),
@@ -36,7 +36,7 @@
 #
 #     DATE STARTED      : 09/23/2020
 #
-#     LAST MODIFIED     : 09/23/2020
+#     LAST MODIFIED     : 03/29/2021
 #
 #     SYNOPSIS
 #       This is a smoke test for the HMS HBTD API that makes basic HTTP
@@ -56,12 +56,12 @@
 #       This smoke test is based on the Shasta health check srv_check.sh
 #       script in the CrayTest repository that verifies the basic health of
 #       various microservices but instead focuses exclusively on the HBTD
-#       API. It was implemented to run from the ct-pipelines container off
+#       API. It was implemented to run from the ct-portal container off
 #       of the NCN of the system under test within the DST group's Continuous
 #       Testing (CT) framework as part of the remote-smoke test suite.
 #
 #     SPECIAL REQUIREMENTS
-#       Must be executed from the ct-pipelines container on a remote host
+#       Must be executed from the ct-portal container on a remote host
 #       (off of the NCNs of the test system) with the Continuous Test
 #       infrastructure installed.
 #
@@ -69,11 +69,12 @@
 #       user       date         description
 #       -------------------------------------------------------
 #       schooler   09/23/2020   initial implementation
+#       schooler   03/29/2021   add check_job_status test
 #
 #     DEPENDENCIES
 #       - hms_smoke_test_lib_ncn-resources_remote-resources.sh which is
 #         expected to be packaged in
-#         /opt/cray/tests/remote-resources/hms/hms-test in the ct-pipelines
+#         /opt/cray/tests/remote-resources/hms/hms-test in the ct-portal
 #         container.
 #
 #     BUGS/LIMITATIONS
@@ -81,12 +82,13 @@
 #
 ###############################################################
 
-# HMS test metrics test cases: 5
+# HMS test metrics test cases: 6
 # 1. Check cray-hbtd pod statuses
-# 2. GET /health API response code
-# 3. GET /liveness API response code
-# 4. GET /readiness API response code
-# 5. GET /params API response code
+# 2. Check cray-hbtd job statuses
+# 3. GET /health API response code
+# 4. GET /liveness API response code
+# 5. GET /readiness API response code
+# 6. GET /params API response code
 
 # initialize test variables
 TEST_RUN_TIMESTAMP=$(date +"%Y%m%dT%H%M%S")
@@ -139,7 +141,14 @@ function check_pod_status()
     return $?
 }
 
-# TARGET_SYSTEM is expected to be set in the ct-pipelines container
+# check_job_status
+function check_job_status()
+{
+    run_check_job_status "cray-hbtd"
+    return $?
+}
+
+# TARGET_SYSTEM is expected to be set in the ct-portal container
 if [[ -z ${TARGET_SYSTEM} ]] ; then
     >&2 echo "ERROR: TARGET_SYSTEM environment variable is not set"
     cleanup
@@ -150,7 +159,7 @@ else
     echo "TARGET=${TARGET}"
 fi
 
-# TOKEN is expected to be set in the ct-pipelines container
+# TOKEN is expected to be set in the ct-portal container
 if [[ -z ${TOKEN} ]] ; then
     >&2 echo "ERROR: TOKEN environment variable is not set"
     cleanup
@@ -183,6 +192,14 @@ echo "Running hbtd_smoke_test..."
 
 # run initial pod status test
 check_pod_status
+if [[ $? -ne 0 ]] ; then
+    echo "FAIL: hbtd_smoke_test ran with failures"
+    cleanup
+    exit 1
+fi
+
+# run initial job status test
+check_job_status
 if [[ $? -ne 0 ]] ; then
     echo "FAIL: hbtd_smoke_test ran with failures"
     cleanup
