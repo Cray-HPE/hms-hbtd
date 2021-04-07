@@ -1,7 +1,8 @@
 #!/bin/bash -l
+#
 # MIT License
 #
-# (C) Copyright [2018-2021] Hewlett Packard Enterprise Development LP
+# (C) Copyright [2019-2021] Hewlett Packard Enterprise Development LP
 #
 # Permission is hereby granted, free of charge, to any person obtaining a
 # copy of this software and associated documentation files (the "Software"),
@@ -35,7 +36,7 @@
 #
 #     DATE STARTED      : 04/29/2019
 #
-#     LAST MODIFIED     : 09/23/2020
+#     LAST MODIFIED     : 03/29/2021
 #
 #     SYNOPSIS
 #       This is a smoke test for the HMS HBTD API that makes basic HTTP
@@ -69,7 +70,7 @@
 #       schooler   07/10/2019   add AuthN support for API calls
 #       schooler   07/10/2019   update smoke test library location
 #                               from hms-services to hms-common
-#       schooler   08/19/2019   add initial check_pod_status test
+#       schooler   08/19/2019   add check_pod_status test
 #       schooler   09/06/2019   add test case documentation
 #       schooler   09/09/2019   update smoke test library location
 #                               from hms-common to hms-test
@@ -77,6 +78,7 @@
 #       schooler   10/07/2019   switch from SMS to NCN naming convention
 #       schooler   06/24/2020   add health, liveness, and readiness API tests
 #       schooler   09/23/2020   use latest hms_smoke_test_lib
+#       schooler   03/29/2021   add check_job_status test
 #
 #     DEPENDENCIES
 #       - hms_smoke_test_lib_ncn-resources_remote-resources.sh which is
@@ -88,12 +90,13 @@
 #
 ###############################################################
 
-# HMS test metrics test cases: 5
+# HMS test metrics test cases: 6
 # 1. Check cray-hbtd pod statuses
-# 2. GET /health API response code
-# 3. GET /liveness API response code
-# 4. GET /readiness API response code
-# 5. GET /params API response code
+# 2. Check cray-hbtd pod statuses
+# 3. GET /health API response code
+# 4. GET /liveness API response code
+# 5. GET /readiness API response code
+# 6. GET /params API response code
 
 # initialize test variables
 TEST_RUN_TIMESTAMP=$(date +"%Y%m%dT%H%M%S")
@@ -154,6 +157,13 @@ function check_pod_status()
     return $?
 }
 
+# check_job_status
+function check_job_status()
+{
+    run_check_job_status "cray-hbtd"
+    return $?
+}
+
 trap ">&2 echo \"recieved kill signal, exiting with status of '1'...\" ; \
     cleanup ; \
     exit 1" SIGHUP SIGINT SIGTERM
@@ -178,6 +188,14 @@ echo "Running hbtd_smoke_test..."
 
 # run initial pod status test
 check_pod_status
+if [[ $? -ne 0 ]] ; then
+    echo "FAIL: hbtd_smoke_test ran with failures"
+    cleanup
+    exit 1
+fi
+
+# run initial job status test
+check_job_status
 if [[ $? -ne 0 ]] ; then
     echo "FAIL: hbtd_smoke_test ran with failures"
     cleanup
