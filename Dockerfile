@@ -23,7 +23,7 @@
 # Dockerfile for building hms-hmi-service.
 
 # Build base just has the packages installed we need.
-FROM dtr.dev.cray.com/baseos/golang:1.14-alpine3.12 AS build-base
+FROM arti.dev.cray.com/baseos-docker-master-local/golang:1.14-alpine3.12 AS build-base
 
 RUN set -ex \
     && apk update \
@@ -58,7 +58,7 @@ RUN set -ex && go build -v -i -o /usr/local/bin/hbtd stash.us.cray.com/HMS/hms-h
 
 
 ### Final Stage ###
-FROM dtr.dev.cray.com/baseos/alpine:3.12
+FROM arti.dev.cray.com/baseos-docker-master-local/alpine:3.12
 LABEL maintainer="Hewlett Packard Enterprise"
 EXPOSE 28500
 STOPSIGNAL SIGTERM
