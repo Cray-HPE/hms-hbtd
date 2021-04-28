@@ -1,0 +1,18 @@
+Manual Tests
+
+Preparation:
+
+ o Compile fake-hsm.go  (go build fake-hsm.go)
+ o Build HBTD into a binary and copy into this directory.
+
+Run Tests:
+
+ o runMe.sh -- happy path testing.  Comments in the script indicate what should be happening
+   in HBTD.
+
+ o runMeHSMError.sh -- similar test, but forces fake HSM to throw errors in some cases.
+   Comments show what should be happening in HBTD.
+
+ o runMeHSMDelay.sh -- similar test but forces fake HSM to have a 20 second delay in some
+   cases.   Comments show what should be happeing in HBTD.
+
