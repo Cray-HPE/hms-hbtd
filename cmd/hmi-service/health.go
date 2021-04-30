@@ -70,6 +70,9 @@ func checkHSM() {
 			base.SetHTTPUserAgent(req,serviceName)
 			rsp,rerr := htrans.client.Do(req)
 			if (rerr == nil) {
+				if (rsp.Body != nil) {
+					rsp.Body.Close()
+				}
 				if (rsp.StatusCode == http.StatusOK) {
 					lrdy = true
 				}
