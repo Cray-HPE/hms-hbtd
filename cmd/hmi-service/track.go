@@ -29,11 +29,13 @@ import (
     "time"
     "io/ioutil"
     "bytes"
+    "context"
     "strconv"
     "stash.us.cray.com/HMS/hms-base"
     "reflect"
     "fmt"
     "os"
+    "sync"
 
     "github.com/gorilla/mux"
 )
@@ -80,10 +82,15 @@ type smjson_einfo struct {
     Flag string    `json:"Flag"`
 }
 
-type smjcomp_v1 struct {
-    State string `json:"State"`
-    Flag string  `json:"Flag"`
+type smjbulk_v1 struct {
+    ComponentIDs []string `json:"ComponentIDs"`
+    State        string   `json:"State"`
+    Flag         string   `json:"Flag"`
     ExtendedInfo smjson_einfo
+
+	//Unmarshallable, used for HSM communication status
+    needSend     bool
+    sentOK       bool
 }
 
 // for sending HB state changes to the telemetry bus
@@ -132,7 +139,10 @@ const (
 
 const TELEMETRY_MESSAGE_ID = "Heartbeat Change Notification"
 
-const UTEST_URL = "__UNIT_TEST_URL__"
+// Values used to signify HSM processing activity
+
+const HSMQ_DIE = 0x8675309
+const HSMQ_NEW = 0x11223344
 
 
 /////////////////////////////////////////////////////////////////////////////
@@ -141,9 +151,16 @@ const UTEST_URL = "__UNIT_TEST_URL__"
 
 // Chan/async Qs
 
-var sm_asyncQ = make(chan sminfo, 50000)
-var hsmQ = make(chan smjcomp_v1, 50000)
-var telemetryQ = make(chan telemetry_json_v1, 50000)
+var hsmUpdateQ   = make(chan int, 50000)
+var telemetryQ   = make(chan telemetry_json_v1, 50000)
+var StartMap     = make(map[string]uint64)
+var RestartMap   = make(map[string]uint64)
+var StopWarnMap  = make(map[string]uint64)
+var StopErrorMap = make(map[string]uint64)
+var hbSeq uint64
+var hsmWG sync.WaitGroup
+var hbMapLock sync.Mutex
+var testMode bool
 
 // Used to track the number of components currently tracked
 
@@ -151,26 +168,29 @@ var sg_ncomp = 0
 
 
 /////////////////////////////////////////////////////////////////////////////
-// Send a patch to the State Mgr to set heartbeat info.
-// TODO: do we want a persistent Request and/or Client and just re-use it?
+// Send a patch to the State Mgr to indicate heartbeat status change.  Note 
+// that this is called as part of a wait group for synchronization.  The 
+// result of the operation (pass/fail) is indicated in the passed-in data
+// struct.
 //
-// data(in): Byte array containing marshal'd JSON with the SM PATCH data.
-// Return:   None
+// smjinfo(in): Bulk state update data to send to HSM.
+// Return:      None.
 /////////////////////////////////////////////////////////////////////////////
 
-func send_sm_patch(smjinfo smjcomp_v1) int {
+func send_sm_patch(smjinfo *smjbulk_v1) {
+    defer hsmWG.Done()
+
     barr,err := json.Marshal(smjinfo)
     if (err != nil) {
         hbtdPrintln("INTERNAL ERROR marshalling SM info:",err)
-        return -1
+        return
     }
 
     url := app_params.statemgr_url.string_param
 
-    if (smjinfo.ExtendedInfo.Message != UTEST_URL) {
-        url = url + "/" + SM_URL_MID + "/" +
-           smjinfo.ExtendedInfo.Id + "/" + SM_URL_SUFFIX
-	}
+    if (!testMode) {
+        url = url + "/" + SM_URL_MID + "/" + SM_URL_SUFFIX
+    }
 
     if (app_params.debug_level.int_param > 1) {
         hbtdPrintf("Sending PATCH to State Mgr URL: '%s', Data: '%s'",
@@ -180,12 +200,16 @@ func send_sm_patch(smjinfo smjcomp_v1) int {
     //Don't actually send anything to the SM if we're in "--nosm" mode.
 
     if (app_params.nosm.int_param != 0) {
-        return 0
+        return
     }
 
     // Make PATCH requests this way since http.Client has no Patch() method.
 
-    req,_ := http.NewRequest("PATCH", url, bytes.NewBuffer(barr))
+    ctx,cancel := context.WithTimeout(context.Background(),
+	                  (time.Duration(app_params.statemgr_timeout.int_param) *
+	                   time.Second))
+    defer cancel()
+    req,_ := http.NewRequestWithContext(ctx,"PATCH", url, bytes.NewBuffer(barr))
     req.Header.Set("Content-Type","application/json")
     base.SetHTTPUserAgent(req,serviceName)
 
@@ -193,79 +217,268 @@ func send_sm_patch(smjinfo smjcomp_v1) int {
 
     if (err != nil) {
         hbtdPrintln("ERROR sending PATCH to SM:",err)
-        return -1
+        return
     } else {
         defer rsp.Body.Close()
+        _,_ = ioutil.ReadAll(rsp.Body)
         if ((rsp.StatusCode == http.StatusOK) ||
             (rsp.StatusCode == http.StatusNoContent) ||
             (rsp.StatusCode == http.StatusAccepted)) {
-
-            if (app_params.debug_level.int_param > 0) {
+            if (app_params.debug_level.int_param > 1) {
                 hbtdPrintln("SUCCESS sending PATCH to SM, response:",rsp)
             }
-        } else if (rsp.StatusCode == http.StatusNotFound) {
-            return http.StatusNotFound
         } else {
             hbtdPrintln("ERROR response from State Manager:",rsp.Status,"Error code:",rsp.StatusCode)
-            return -1
+            return
         }
     }
 
-    return 0
+    smjinfo.sentOK = true
+    return
+}
+
+// Convenience function.  Takes component heartbeat status maps and prepares
+// them for HB change processing.  Populates an "all components map" that is
+// the superset of recent HB changes to persistent ones.
+
+func groomCompLocalMapsPRE(allCompsMap map[string]bool, cpStartMap,cpRestartMap,cpStopWarnMap,cpStopErrorMap map[string]uint64) {
+	//For each HB change map, populate the "all components" map, plus
+	//copy the global HB change map entries for each node into the more
+	//persistent one.
+
+	// HB Started maps
+	for k,v := range(cpStartMap) {
+		if (v != 0) {
+			allCompsMap[k] = true
+		}
+	}
+	for k,v := range(StartMap) {
+		if (v != 0) {
+			cpStartMap[k] = v
+			StartMap[k] = 0
+			allCompsMap[k] = true
+		}
+	}
+
+	// HB Restarted maps
+	for k,v := range(cpRestartMap) {
+		if (v != 0) {
+			allCompsMap[k] = true
+		}
+	}
+	for k,v := range(RestartMap) {
+		if (v != 0) {
+			cpRestartMap[k] = v
+			RestartMap[k] = 0
+			allCompsMap[k] = true
+		}
+	}
+
+	// HB Stopped/warning maps
+	for k,v := range(cpStopWarnMap) {
+		if (v != 0) {
+			allCompsMap[k] = true
+		}
+	}
+	for k,v := range(StopWarnMap) {
+		if (v != 0) {
+			cpStopWarnMap[k] = v
+			StopWarnMap[k] = 0
+			allCompsMap[k] = true
+		}
+	}
+
+	// HB Stopped/error maps
+	for k,v := range(cpStopErrorMap) {
+		if (v != 0) {
+			allCompsMap[k] = true
+		}
+	}
+	for k,v := range(StopErrorMap) {
+		if (v != 0) {
+			cpStopErrorMap[k] = v
+			StopErrorMap[k] = 0
+			allCompsMap[k] = true
+		}
+	}
+}
+
+// Convenience function.  For each entry in map1, clear the matching map
+// entry for all other maps.  This is done after successful SM PATCH
+// operations to clear the HB state maps.
+
+func groomCompLocalMapsPOST(map1,map2,map3,map4 map[string]uint64) {
+	for k,_ := range(map1) {
+		map2[k] = 0
+		map3[k] = 0
+		map4[k] = 0
+	}
+}
+
+// Convenience function.  Creates HSM BulkStateInfo data structures, one
+// for each HB status change type (start/restart/stop-warn/stop-error) and
+// populates default values.
+
+func createBSI() (smjbulk_v1, smjbulk_v1, smjbulk_v1, smjbulk_v1) {
+	var bsiStart,bsiRestart,bsiStopWarn,bsiStopError smjbulk_v1
+	bsiStart.State = base.StateReady.String()
+	bsiStart.Flag = base.FlagOK.String()
+	bsiStart.ExtendedInfo.Message = "Heartbeat started"
+	bsiRestart.State = base.StateReady.String()
+	bsiRestart.Flag = base.FlagOK.String()
+	bsiRestart.ExtendedInfo.Message = "Heartbeat restarted"
+	bsiStopWarn.State = base.StateReady.String()
+	bsiStopWarn.Flag = base.FlagWarning.String()
+	bsiStopWarn.ExtendedInfo.Message = "Heartbeat stopped -- might be dead"
+	bsiStopError.State = base.StateStandby.String()
+	bsiStopError.Flag = base.FlagAlert.String()
+	bsiStopError.ExtendedInfo.Message = "Heartbeat stopped -- declared dead"
+	return bsiStart,bsiRestart,bsiStopWarn,bsiStopError
 }
 
 /////////////////////////////////////////////////////////////////////////////
-// Send a PATCH request to the State Manager.   Perform retries as needed.
-//
-// data(in):  PATCH data in JSON format to send to State Mgr.
-// Return:    0 on  success, -1 on error (retries exhausted).
+// Thread func.  Takes the values found in the global and local/persistent 
+// HB status change maps, determines which ones to place into an HSM 
+// BulkStateChange data structure and then PATCH them to HSM.  If there are
+// failures with the PATCH, the persistent maps will help resolve conflicts
+// when more than one HB state change occurs while HSM is unavailable.
 /////////////////////////////////////////////////////////////////////////////
 
 func send_sm_req() {
-    var rval int
-	var smjinfo smjcomp_v1
+	cpStartMap := make(map[string]uint64)
+	cpRestartMap := make(map[string]uint64)
+	cpStopWarnMap := make(map[string]uint64)
+	cpStopErrorMap := make(map[string]uint64)
 
 	for {
-		smjinfo = <- hsmQ
+		//Wait for next HB scan to complete.
 
-        //This is for test purposes only.
+		if (app_params.debug_level.int_param > 1) {
+			hbtdPrintf("Waiting for a Q Pop.")
+		}
+		qval := <-hsmUpdateQ
+		if (app_params.debug_level.int_param > 1) {
+			hbtdPrintf("Q Popped, val: %x.",qval)
+		}
+		if (qval == HSMQ_DIE) {
+			hbtdPrintf("DIE message received, exiting send_sm_req().")
+			break
+		}
+		//Copy HB state changes from the global component maps into into local 
+		//maps.
+		//Also build a map of all pertinent components (superset of local and
+		//global maps).
 
-        if (smjinfo.Flag == "DIE") {
-            hbtdPrintf("Aborting send SM req loop.\n")
-            return
-        }
+		allCompsMap := make(map[string]bool)
+		hbMapLock.Lock()
+		groomCompLocalMapsPRE(allCompsMap,cpStartMap,cpRestartMap,cpStopWarnMap,cpStopErrorMap)
+		hbMapLock.Unlock()
 
-        //If HSM is not ready, wait until it's ready.  Can't process anything in
-        //that case.  If it never goes ready, we're stuck.  HBTD is no good
-        //without the HSM.
+		//Populate local copies of the HB state maps from the global ones.
+		//De-duplicate the maps.  If any component saw more than one HB
+		//change, take the one with the highest sequence number.  Note that 
+		//each time through the outer most for() loop (indicating a new HB 
+		//scan was done) if there were any HSM send errors from the previous 
+		//scan, the HB states will still be retained in local copies of the
+		//maps, so we'll just add from the global state maps (not start over).
+		//If the HSM data was sent OK, the local maps are cleared and new 
+		//data is sent.
 
-        for !hsmReady {
-            time.Sleep(5 * time.Second)
-        }
+		bsiStart,bsiRestart,bsiStopWarn,bsiStopError := createBSI()
 
-        //Send PATCH.  If it returns an error and if the error is 404, retry a
-        //few times (corner/gap case).  If it's any other error, HSM is on the
-        //fritz, retry forever there too.
+		for k,_ := range(allCompsMap) {
+			start,_   := cpStartMap[k]
+			restart,_ := cpRestartMap[k]
+			swarn,_   := cpStopWarnMap[k]
+			serr,_    := cpStopErrorMap[k]
 
-        maxTry := app_params.statemgr_retries.int_param
+			//The state change category with the highest value wins, meaning 
+			//that it came in last, time-wise.
 
-        for {
-            rval = send_sm_patch(smjinfo)
-            if (rval == 0) {
-                break
-            } else if (rval == http.StatusNotFound) {
-                //Component not found.  Retry a few times, then give up.
-                if (maxTry == 0) {
-                    hbtdPrintf("Component not found in HSM (404): %s, giving up.",
-                        smjinfo.ExtendedInfo.Id)
-                    break
-                }
-                maxTry --
-           }
+			if ((start > restart) && (start > swarn) && (start > serr)) {
+				bsiStart.ComponentIDs = append(bsiStart.ComponentIDs,k)
+			} else if ((restart > start) && (restart > swarn) && (restart > serr)) {
+				bsiRestart.ComponentIDs = append(bsiRestart.ComponentIDs,k)
+			} else if ((swarn > start) && (swarn > restart) && (swarn > serr)) {
+				bsiStopWarn.ComponentIDs = append(bsiStopWarn.ComponentIDs,k)
+			} else if ((serr > start) && (serr > restart) && (serr > swarn)) {
+				bsiStopError.ComponentIDs = append(bsiStopError.ComponentIDs,k)
+			}
+		}
 
-            //Else, HSM is out to lunch.  Retry until it works
-            time.Sleep(1 * time.Second)
-        }
+        //If HSM is not ready, bail until next scan.
+
+        if !hsmReady {
+			hbtdPrintf("HSM Not ready, waiting until next scan.")
+			continue	//wait until next scan.
+		}
+
+		//Check each bulk operation and add a wait count, then send the SM 
+		//patches, in parallel, one for each HB state change type.
+
+		if (len(bsiStart.ComponentIDs) > 0) {
+			hsmWG.Add(1)
+			bsiStart.needSend = true
+			go send_sm_patch(&bsiStart)
+		}
+		if (len(bsiRestart.ComponentIDs) > 0) {
+			hsmWG.Add(1)
+			bsiRestart.needSend = true
+			go send_sm_patch(&bsiRestart)
+		}
+		if (len(bsiStopWarn.ComponentIDs) > 0) {
+			hsmWG.Add(1)
+			bsiStopWarn.needSend = true
+			go send_sm_patch(&bsiStopWarn)
+		}
+		if (len(bsiStopError.ComponentIDs) > 0) {
+			hsmWG.Add(1)
+			bsiStopError.needSend = true
+			go send_sm_patch(&bsiStopError)
+		}
+
+		if (!bsiStart.needSend && !bsiRestart.needSend &&
+		    !bsiStopWarn.needSend && !bsiStopError.needSend) {
+			if (app_params.debug_level.int_param > 1) {
+				hbtdPrintf("Nothing to send to HSM.")
+			}
+			continue
+		}
+
+		//Wait until they are all complete.
+		if (app_params.debug_level.int_param > 1) {
+			hbtdPrintf("Waiting for HSM PATCHs to complete...")
+		}
+		hsmWG.Wait()
+		if (app_params.debug_level.int_param > 1) {
+			hbtdPrintf("PATCHs complete: %t %t %t %t",
+				bsiStart.sentOK, bsiRestart.sentOK,bsiStopWarn.sentOK,
+				bsiStopError.sentOK)
+		}
+
+		//See if all of the ones we sent have completed OK.  For the ones
+		//that sent to SM OK, delete it's local map to start over.  Any
+		//that failed, retain the local map so it can be updated on the next
+		//scan.
+
+		hbMapLock.Lock()
+		if (bsiStart.needSend && bsiStart.sentOK) {
+			groomCompLocalMapsPOST(cpStartMap,cpRestartMap,cpStopWarnMap,cpStopErrorMap)
+			cpStartMap = make(map[string]uint64)
+		}
+		if (bsiRestart.needSend && bsiRestart.sentOK) {
+			groomCompLocalMapsPOST(cpRestartMap,cpStartMap,cpStopWarnMap,cpStopErrorMap)
+			cpRestartMap = make(map[string]uint64)
+		}
+		if (bsiStopWarn.needSend && bsiStopWarn.sentOK) {
+			groomCompLocalMapsPOST(cpStopWarnMap,cpStartMap,cpRestartMap,cpStopErrorMap)
+			cpStopWarnMap = make(map[string]uint64)
+		}
+		if (bsiStopError.needSend && bsiStopError.sentOK) {
+			groomCompLocalMapsPOST(cpStopErrorMap,cpStartMap,cpRestartMap,cpStopWarnMap)
+			cpStopErrorMap = make(map[string]uint64)
+		}
+		hbMapLock.Unlock()
     }
 }
 
@@ -300,134 +513,60 @@ func telemetry_handler() {
 }
 
 /////////////////////////////////////////////////////////////////////////////
-// This is a thread which will process the sending of messages to the State
-// Manager.  We don't want to block on this, ever, so we will use a buffered
-// channel to send requests from the main thread, and process them in this
-// thread.
+// Set values in the HB status change component maps based on this heartbeat's
+// information.  This is called by the heartbeat checker and when new 
+// heartbeats arrive.  The maps are used when the heartbeat checker calls
+// send_sm_message() to update HSM.
 //
-// This function will perform a PATCH call into the State Mgr to set a warning
-// or error flag for the component in question.  Along with this will be
-// info about the heartbeat (status).
-//
-// Note that we use the SM's generic state change URL and send an "array"
-// (we only send one) of components to it.  We could specifically target aa
-// URL for the given component, but that requires URL fiddling.  This way
-// works for any number of components.  For now we only send one, but could
-// "bunch them up" at a later time if we need to.
-//
-// TODO: is it better to have a go routine per SM update request, or a single
-// go routine to handle all of them?  I think the latter, otherwise SM could
-// get pummelled by lots of simultaneous requests.  But, that shouldn't happen
-// very often.  Which is better?
-//
-// Args, return: None
+// We also will put HB change notifications into the Kafka Q.
 /////////////////////////////////////////////////////////////////////////////
 
-func send_sm_message() {
-    var smstuff sminfo
-    var smjinfo smjcomp_v1
-    var telemsg telemetry_json_v1
-    var hbMsg string
+func hb_update_notify(hb *hbinfo, to_state int) {
+	var telemsg telemetry_json_v1
 
-    telemsg.MessageID = TELEMETRY_MESSAGE_ID
+	telemsg.MessageID = TELEMETRY_MESSAGE_ID
+	telemsg.Id = hb.Component
+	telemsg.LastHBTimeStamp = hb.Last_hb_timestamp
+	hbSeq ++
 
-    for {
-        smstuff = <-sm_asyncQ
+	switch(to_state) {
+		case HB_started:
+			hbMapLock.Lock()
+			StartMap[hb.Component] = hbSeq
+			hbMapLock.Unlock()
+			telemsg.NewState = base.StateReady.String()
+			telemsg.NewFlag = base.FlagOK.String()
+			telemsg.Info = "Heartbeat started."
+		case HB_restarted_warn:
+			hbMapLock.Lock()
+			RestartMap[hb.Component] = hbSeq
+			hbMapLock.Unlock()
+			telemsg.NewState = base.StateReady.String()
+			telemsg.NewFlag = base.FlagOK.String()
+			telemsg.Info = "Heartbeat re-started."
+		case HB_stopped_warn:
+			hbMapLock.Lock()
+			StopWarnMap[hb.Component] = hbSeq
+			hbMapLock.Unlock()
+			telemsg.NewState = base.StateReady.String()
+			telemsg.NewFlag = base.FlagWarning.String()
+			telemsg.Info = "Heartbeat stopped, node may be dead."
+		case HB_stopped_error:
+			hbMapLock.Lock()
+			StopErrorMap[hb.Component] = hbSeq
+			hbMapLock.Unlock()
+			telemsg.NewState = base.StateStandby.String()
+			telemsg.NewFlag = base.FlagAlert.String()
+			telemsg.Info = "Heartbeat stopped, node is dead."
+		default:
+			hbtdPrintf("INTERNAL ERROR: UNKNOWN STATE: %d",to_state)
+	}
 
-        //This is for test purposes only.
-
-        if (smstuff.to_state == HB_quit) {
-            hbtdPrintf("Aborting SM loop.\n")
-            return
-        }
-
-        hbMsg = fmt.Sprintf("Sending a notification to SM: '%s' --",
-                                        smstuff.component)
-        smjinfo.ExtendedInfo.Id = smstuff.component
-        smjinfo.State = base.StateUnknown.String()
-        smjinfo.Flag = base.FlagUnknown.String()
-        smjinfo.ExtendedInfo.Flag = base.FlagUnknown.String()
-        telemsg.Id = smstuff.component
-        telemsg.LastHBTimeStamp = smstuff.last_hb_timestamp
-
-        switch (smstuff.to_state) {
-            case HB_started:
-                hbMsg += fmt.Sprintf("STARTED.");
-                smjinfo.Flag = base.FlagOK.String()
-                smjinfo.State = base.StateReady.String()
-                smjinfo.ExtendedInfo.Flag = base.FlagOK.String()
-                smjinfo.ExtendedInfo.Message = "Heartbeat started."
-                telemsg.NewState = smjinfo.State
-                telemsg.NewFlag = smjinfo.Flag
-                telemsg.Info = smjinfo.ExtendedInfo.Message
-                break
-            case HB_restarted_warn:
-                hbMsg += fmt.Sprintf("RESTARTED: WARNING.");
-                smjinfo.Flag = base.FlagOK.String()
-                smjinfo.State = base.StateReady.String()
-                smjinfo.ExtendedInfo.Flag = base.FlagOK.String()
-                smjinfo.ExtendedInfo.Message = "Heartbeat re-started."
-                break
-            case HB_stopped_warn:
-                hbMsg += fmt.Sprintf("STOPPED: WARNING.");
-                smjinfo.Flag = base.FlagWarning.String()
-                smjinfo.State = base.StateReady.String()
-                smjinfo.ExtendedInfo.Flag = base.FlagWarning.String()
-                smjinfo.ExtendedInfo.Message = "Heartbeat stopped, node may be dead."
-                break
-            case HB_stopped_error:
-                hbMsg += fmt.Sprintf("STOPPED: ERROR.");
-                smjinfo.Flag = base.FlagAlert.String()
-                smjinfo.State = base.StateStandby.String() //TODO: is this correct?
-                smjinfo.ExtendedInfo.Flag = base.FlagAlert.String()
-                smjinfo.ExtendedInfo.Message = "Heartbeat stopped, node is dead."
-                break
-            default:
-                hbMsg += fmt.Sprintf("INTERNAL ERROR: UNKNOWN STATE: %d",smstuff.to_state)
-                hbtdPrintf(hbMsg)
-                continue    //skip this one
-        }
-        hbtdPrintf("%s",hbMsg);
-
-        //Send PATCH to HSM
-
-        select {
-            case hsmQ <- smjinfo:
-            default:
-                hbtdPrintf("WARNING: HSM Operation Queue is full! Can't send state update for %s",
-                    smstuff.component)
-        }
-
-        //Send to telemetry bus if telemetry is turned on
-
-        telemsg.NewState = smjinfo.State
-        telemsg.NewFlag = smjinfo.Flag
-        telemsg.Info = smjinfo.ExtendedInfo.Message
-        select {
-            case telemetryQ <- telemsg:
-            default:
-                hbtdPrintf("INFO: Telemetry bus not accepting messages, heartbeat event not sent.")
-        }
-    }
-}
-
-/////////////////////////////////////////////////////////////////////////////
-// Send a message to the state manager notification worker thread to send
-// a message.  This function should never block!
-//
-// NOTE: this is the ONLY function that can put messages into the Q/chan!!.
-//
-// Args, return: None
-/////////////////////////////////////////////////////////////////////////////
-
-func state_mgr_notify(hb *hbinfo, to_state int) {
-    smdata := sminfo{hb.Component,hb.Last_hb_status,to_state,hb.Last_hb_timestamp}
-    select {
-        case sm_asyncQ <- smdata:
-        default:
-            hbtdPrintf("WARNING: HSM Update Queue is full! Can't send state update for %s",
-                hb.Component)
-    }
+	select {
+		case telemetryQ <-telemsg:
+		default:
+			hbtdPrintf("INFO: Telemetry bus not accepting messages, heartbeat event not sent.")
+	}
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -458,12 +597,23 @@ func hb_checker () {
     var verr error
     var now,tdiff,lhbtime int64
 
+    if (app_params.debug_level.int_param > 1) {
+        hbtdPrintf("HB CHECKER.")
+    }
+
     ncomp := 0
 
     // Grab the inter-process lock and get all keys/vals.  
 
     if (app_params.check_interval.int_param > 0) {
+        tstart := time.Now()
         lckerr := kvHandle.DistTimedLock(app_params.check_interval.int_param*2)
+        tfin := time.Now()
+        elapsed := tfin.Sub(tstart) / time.Second
+        if (int(elapsed) > (app_params.check_interval.int_param*3)) {
+            hbtdPrintf("WARNING: Distributed lock acquisition attempt took %d seconds.",
+            elapsed)
+        }
         if (lckerr != nil) {
             //Lock is already held.  This means someone else is doing the check,
             //so we don't have to.
@@ -546,14 +696,14 @@ func hb_checker () {
 
                 //Send a warning to SM
                 nhb.Had_warning = HB_WARN_GAP
-                state_mgr_notify(&nhb,HB_stopped_warn)
+                hb_update_notify(&nhb,HB_stopped_warn)
                 storeit = true
             } else {
                 hbtdPrintf("ERROR: Heartbeat overdue %d seconds for '%s' (declared dead), last status: '%s'\n",
                     tdiff,nhb.Component,nhb.Last_hb_status)
 
                 //Send an error to SM
-                state_mgr_notify(&nhb,HB_stopped_error)
+                hb_update_notify(&nhb,HB_stopped_error)
 
                 //Since it's dead, take it out of the list.
                 verr = kvHandle.Delete(kv.Key)
@@ -570,7 +720,7 @@ func hb_checker () {
 
                 //Send a warning to SM
                 nhb.Had_warning = HB_WARN_NORMAL
-                state_mgr_notify(&nhb,HB_stopped_warn)
+                hb_update_notify(&nhb,HB_stopped_warn)
                 storeit = true
             }
         } else {
@@ -579,7 +729,8 @@ func hb_checker () {
             if (nhb.Had_warning == HB_WARN_NORMAL) {
                 nhb.Had_warning = HB_WARN_NONE
                 storeit = true
-                state_mgr_notify(&nhb,HB_restarted_warn)
+                hbtdPrintf("INFO: Heartbeat restarted for '%s'\n",nhb.Component)
+                hb_update_notify(&nhb,HB_restarted_warn)
             }
         }
 
@@ -602,6 +753,8 @@ func hb_checker () {
             hbtdPrintln("ERROR unlocking distributed lock:",err)
         }
     }
+
+    hsmUpdateQ <-HSMQ_NEW
 
     if (ncomp != sg_ncomp) {
         sg_ncomp = ncomp
@@ -750,8 +903,14 @@ func hbRcv(w http.ResponseWriter, r *http.Request) {
     //much just overwrite it anyway.  But, doing it this way makes it easy
     //to do any data compares from the previous HB if we want to.
 
+    if (app_params.debug_level.int_param > 1) {
+        hbtdPrintf("HB received for: '%s'",jdata.Component)
+    }
     newkey := 0
     kval,kok,kerr := kvHandle.Get(jdata.Component)
+    if (kerr != nil) {
+        hbtdPrintf("Error reading KV key for: '%s', '%v'",jdata.Component,kerr)
+    }
 
     if ((kok == false) || (kerr != nil)) {
         //Key does not exist.  Create it.
@@ -812,7 +971,8 @@ func hbRcv(w http.ResponseWriter, r *http.Request) {
 
     if (newkey != 0) {
         //Send notification of a new HB startup
-        state_mgr_notify(&hbb,HB_started)
+        hbtdPrintf("INFO: Heartbeat started for '%s'\n",hbb.Component)
+        hb_update_notify(&hbb,HB_started)
     }
 }
 

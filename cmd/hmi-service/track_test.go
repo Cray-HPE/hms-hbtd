@@ -1,17 +1,17 @@
 // MIT License
-// 
+//
 // (C) Copyright [2018-2021] Hewlett Packard Enterprise Development LP
-// 
+//
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
 // to deal in the Software without restriction, including without limitation
 // the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the
 // Software is furnished to do so, subject to the following conditions:
-// 
+//
 // The above copyright notice and this permission notice shall be included
 // in all copies or substantial portions of the Software.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
@@ -19,7 +19,6 @@
 // OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 // ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 // OTHER DEALINGS IN THE SOFTWARE.
-
 
 package main
 
@@ -40,8 +39,7 @@ import (
     "regexp"
     "stash.us.cray.com/HMS/hms-base"
     "stash.us.cray.com/HMS/hms-hmetcd"
-	"log"
-	"github.com/gorilla/mux"
+    "github.com/gorilla/mux"
 )
 
 
@@ -112,87 +110,6 @@ func one_time_setup() error {
     return err
 }
 
-// Test entry point for send_sm_message().  This test will send various
-// component info to send_sm_message() and compare its stdout with expected
-// values.
-//
-// t(in):  Test framework.
-// Return: None
-
-func TestSend_sm_message(t *testing.T) {
-    var smstuff = []sminfo {
-        sminfo { component: "x1c2s3b0n4",
-                 status: base.FlagOK.String(),
-                 to_state: HB_started,
-               },
-        sminfo { component: "x2c3s4b0n5",
-                 status: base.FlagOK.String(),
-                 to_state: HB_restarted_warn,
-               },
-        sminfo { component: "x3c4s5b0n6",
-                 status: base.FlagWarning.String(),
-                 to_state: HB_stopped_warn,
-               },
-        sminfo { component: "x4c5s6b0n7",
-                 status: base.FlagAlert.String(),
-                 to_state: HB_stopped_error,
-               },
-        sminfo { component: "x2c3s4b0n5",
-                 status: base.FlagAlert.String(),
-                 to_state: HB_quit,
-               },
-    }
-
-    var exp_strs = []string {
-`Sending a notification to SM: 'x1c2s3b0n4' --STARTED.
-Sending a notification to SM: 'x2c3s4b0n5' --RESTARTED: WARNING.
-Sending a notification to SM: 'x3c4s5b0n6' --STOPPED: WARNING.
-Sending a notification to SM: 'x4c5s6b0n7' --STOPPED: ERROR.
-Aborting SM loop.`,
-    }
-
-    t.Logf("** RUNNING send_sm_message TEST")
-
-    ots_err := one_time_setup()
-    if (ots_err != nil) {
-        t.Error("ERROR setting up KV store:",ots_err)
-        return
-    }
-    hbtdPrintf = testPrintf
-    hbtdPrintln = testPrintln
-    initAppParams()
-    app_params.debug_level.int_param = 0
-    app_params.nosm.int_param = 1
-    app_params.statemgr_retries.int_param = 1
-
-    for testIX := 0; testIX < len(smstuff); testIX++ {
-        testPrintClear()
-        sm_asyncQ <- smstuff[testIX]
-    }
-
-    send_sm_message()
-    time.Sleep(1 * time.Second)
-
-    loc_exps := strings.Split(strings.TrimSuffix(exp_strs[0],"\n"),"\n")
-    sort.Strings(loc_exps)
-    loc_acts := strings.Split(strings.TrimSuffix(testPrintData(),"\n"),"\n")
-    sort.Strings(loc_acts)
-    if (len(loc_exps) != len(loc_acts)) {
-        t.Errorf("ERROR, mismatch\nExp: '%s'\nAct: '%s'\n\n",
-            loc_exps,loc_acts)
-    }
-
-    for ix := 0; ix < len(loc_exps); ix++ {
-        if (loc_exps[ix] != loc_acts[ix]) {
-            t.Errorf("ERROR, mismatch\nExp: '%s'\nAct: '%s'\n\n",
-                loc_exps[ix],loc_acts[ix])
-        }
-    }
-
-    time.Sleep(1 * time.Second)
-    t.Logf("  ==> FINISHED send_sm_message TEST")
-}
-
 // Compares expected hb_checker() stdout with actual.  Actual stdout
 // is split by newline into separate strings, which will match the
 // expected stdout format.  Both sets of strings are sorted, and then
@@ -204,24 +121,28 @@ Aborting SM loop.`,
 // Return:    0 if things compare OK, -1 if not
 
 func hb_compare(exps []string, acts string) int {
+    var loc_acts []string
+
     //Sort the exps with the same also as sorting the actuals
 
     loc_exps := exps
     sort.Strings(loc_exps)
 
-    //split the actuals into strings at the newlines
+    //Split the actuals into strings at the newlines and filter out SM patch
+    //errors, which are irrelevant.
 
-    loc_acts := strings.Split(strings.TrimSuffix(acts,"\n"),"\n")
+    la := strings.Split(strings.TrimSuffix(acts,"\n"),"\n")
+    for ix,_ := range(la) {
+        if (strings.Contains(la[ix],"ERROR sending PATCH")) {
+            continue
+        }
+        loc_acts = append(loc_acts,la[ix])
+    }
     sort.Strings(loc_acts)
 
     if (len(loc_exps) != len(loc_acts)) {
         return -1
     }
-
-//for ix := 0; ix < len(loc_exps); ix ++ { //ZZZZ
-//  log.Printf("EXP[%d]: |%s|\n",ix,loc_exps[ix])
-//  log.Printf("ACT[%d]: |%s|\n",ix,loc_acts[ix])
-//}
 
     rx := regexp.MustCompile("overdue [0-9]+ seconds")
     ntimeStr := "overdue xx seconds"
@@ -234,7 +155,6 @@ func hb_compare(exps []string, acts string) int {
         estr = rx.ReplaceAllString(loc_exps[ix],ntimeStr)
         astr = rx.ReplaceAllString(loc_acts[ix],ntimeStr)
         if (estr != astr) {
-log.Printf("MISMATCH:\nestr: |%s|\nastr: |%s|",estr,astr)
             return -1
         }
     }
@@ -411,11 +331,21 @@ func heartbeat(comp string) error {
 }
 
 func kill_sm_goroutines() {
-    smk := sminfo{to_state: HB_quit,}
-    sm_asyncQ <- smk
+	for {
+		if (len(hsmUpdateQ) == 0) {
+			break
+		}
+		_ = <-hsmUpdateQ
+	}
+	hsmUpdateQ <-HSMQ_DIE
 	time.Sleep(100 * time.Millisecond)
-	smreq := smjcomp_v1{Flag: "DIE",}
-	hsmQ <- smreq
+	for {
+		if (len(hsmUpdateQ) == 0) {
+			break
+		}
+		_ = <-hsmUpdateQ
+	}
+
     time.Sleep(2 * time.Second)
 }
 
@@ -430,19 +360,15 @@ func TestHb_checker2(t *testing.T) {
         `WARNING: Heartbeat overdue 60 seconds for 'x0c1s2b0n3' due to HB monitoring gap; might be dead, last status: 'OK'`,
         `WARNING: Heartbeat overdue 60 seconds for 'x0c1s2b0n4' due to HB monitoring gap; might be dead, last status: 'OK'`,
         `Number of components heartbeating: 2`,
-        `Sending a notification to SM: 'x0c1s2b0n3' --STOPPED: WARNING.`,
-        `Sending a notification to SM: 'x0c1s2b0n4' --STOPPED: WARNING.`,
-}
-
-    var exp_strs_2 = []string{`Sending a notification to SM: 'x0c1s2b0n3' --RESTARTED: WARNING.`,
     }
 
-    var exp_strs_3 = []string{"",}
+    var exp_strs_2 = []string{`INFO: Heartbeat restarted for 'x0c1s2b0n3'`, }
+
+    var exp_strs_3 = []string{}
 
     var exp_strs_4 = []string{
         `ERROR: Heartbeat overdue 24 seconds for 'x0c1s2b0n4' (declared dead), last status: 'OK'`,
         `Number of components heartbeating: 1`,
-        `Sending a notification to SM: 'x0c1s2b0n4' --STOPPED: ERROR.`,
     }
 
     //TODO: do we need a time second edge detect?
@@ -464,14 +390,12 @@ func TestHb_checker2(t *testing.T) {
     app_params.warntime.int_param = 15
     app_params.errtime.int_param = 20
 
-    //Clean out the SM chan
-    for len(sm_asyncQ) > 0 {
-        <-sm_asyncQ
+    for (len(hsmUpdateQ) > 0) {
+        <-hsmUpdateQ
     }
 
     go send_sm_req()
     time.Sleep(500 * time.Millisecond)
-    go send_sm_message()
 
     // Create  KV entries for test components.  Note that this would also
     // be tested if we mock up an HTTP request and call hb_rcv()
@@ -946,6 +870,44 @@ func fakeHSMHandler(w http.ResponseWriter, req *http.Request) {
     w.WriteHeader(getSMRVal())
 }
 
+var startComps,restartComps,stopWarnComps,stopErrorComps []string
+var compLock sync.Mutex
+
+func fakeHSMPatchHandler(w http.ResponseWriter, req *http.Request) {
+	var sinfo smjbulk_v1
+	if (getSMRVal() != http.StatusOK) {
+		w.WriteHeader(getSMRVal())
+		return
+	}
+
+	body,err := ioutil.ReadAll(req.Body)
+	if (err != nil) {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	err = json.Unmarshal(body,&sinfo)
+	if (err != nil) {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	compLock.Lock()
+	if ((sinfo.State == base.StateReady.String()) && (sinfo.Flag == base.FlagOK.String())) {
+		if (strings.Contains(sinfo.ExtendedInfo.Message,"beat restarted")) {
+			restartComps = append(restartComps,sinfo.ComponentIDs...)
+		} else {
+			startComps = append(startComps,sinfo.ComponentIDs...)
+		}
+	} else if ((sinfo.State == base.StateReady.String()) && (sinfo.Flag == base.FlagWarning.String())) {
+		stopWarnComps = append(stopWarnComps,sinfo.ComponentIDs...)
+	} else if ((sinfo.State == base.StateStandby.String()) && (sinfo.Flag == base.FlagAlert.String())) {
+		stopErrorComps = append(stopErrorComps,sinfo.ComponentIDs...)
+	}
+	compLock.Unlock()
+
+	w.WriteHeader(http.StatusOK)
+}
+
 func TestSMPatch1(t *testing.T) {
 	htrans.transport = &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
@@ -955,10 +917,8 @@ func TestSMPatch1(t *testing.T) {
 		Timeout: (time.Duration(app_params.statemgr_timeout.int_param) *
 			time.Second),
 	}
-	smjinfo := smjcomp_v1{State: "Ready", Flag: "OK",
-	                      ExtendedInfo: smjson_einfo{Id: "x0c0s0b0n0",
-	                                                 Message: UTEST_URL,
-	                                                 Flag: "OK",},}
+	smjinfo := smjbulk_v1{ComponentIDs: []string{"x0c0s0b0n0"}, State: "Ready", Flag: "OK",
+	                      ExtendedInfo: smjson_einfo{Message: "Test",},}
 
 	srv := httptest.NewServer(http.HandlerFunc(fakeHSMHandler))
 	serviceName = "HBTDTest"
@@ -966,79 +926,35 @@ func TestSMPatch1(t *testing.T) {
 	app_params.statemgr_url.string_param = srv.URL
 	app_params.nosm.int_param = 0
 	hsmReady = true
-
-    for len(hsmQ) > 0 {
-        <-hsmQ
-    }
-	go send_sm_req()
-	time.Sleep(500 * time.Millisecond)
+	testMode = true
 
 	//Run with a OK return from HSM
 
-	t.Log("Running happy-path send_sm_req test")
-	setSMRVal(http.StatusOK)
-	hsmQ <- smjinfo
-	time.Sleep(1 * time.Second)
-	if (len(hsmQ) != 0) {
-		t.Errorf("ERROR: send_sm_req() didn't consume happy-path request correctly.")
-	}
-
-	//Run with 404 returns.  This should take 3 retries.
-
+	t.Log("Running happy-path send_sm_patch test")
 	gotUAHdr = false
-	t.Log("Running 404-path send_sm_req test")
-	setSMRVal(http.StatusNotFound)
-	hsmQ <- smjinfo
-	hsmQ <- smjinfo
-	time.Sleep(1 * time.Second)
-	if (len(hsmQ) != 1) {
-		t.Errorf("ERROR: send_sm_req() didn't consume 404-path request correctly (too fast).")
-	}
-	time.Sleep(5 * time.Second)
-	if (len(hsmQ) != 0) {
-		t.Errorf("ERROR: send_sm_req() didn't consume 404-path request correctly (too slow).")
+	setSMRVal(http.StatusOK)
+	hsmWG.Add(1)
+	smjinfo.sentOK = false
+	go send_sm_patch(&smjinfo)
+	hsmWG.Wait()
+	if (!smjinfo.sentOK) {
+		t.Errorf("ERROR: send_sm_patch() didn't set sentOK flag.")
 	}
 	if (!gotUAHdr) {
 		t.Errorf("ERROR, never saw User-Agent header.")
 	}
-	time.Sleep(5 * time.Second)
 
-	//Run with badness return (500)  Should never return, then change to OK.
+	//Run with badness return (500)  Should be an error.
 
-	t.Log("Running 500-200-path send_sm_req test")
+	t.Log("Running 500-path send_sm_patch test")
 	setSMRVal(http.StatusInternalServerError)
-	hsmQ <- smjinfo
-	hsmQ <- smjinfo
-	time.Sleep(6 * time.Second)
-	if (len(hsmQ) != 1) {
-		t.Errorf("ERROR: send_sm_req() didn't retry 500-path request correctly.")
+	hsmWG.Add(1)
+	smjinfo.sentOK = false
+	go send_sm_patch(&smjinfo)
+	hsmWG.Wait()
+	if (smjinfo.sentOK) {
+		t.Errorf("ERROR: send_sm_patch() incorrectly set sentOK flag.")
 	}
-
-	setSMRVal(http.StatusOK)
-	time.Sleep(3 * time.Second)
-	if (len(hsmQ) != 0) {
-		t.Errorf("ERROR: send_sm_req() didn't recover 500-OK-path request correctly.")
-	}
-
-	//Run with hsmReady == false, then recover
-
-	t.Log("Running  hsmReady test path send_sm_req test")
-	setSMRVal(http.StatusOK)
-	hsmReady = false
-	hsmQ <- smjinfo
-	hsmQ <- smjinfo
-	time.Sleep(6 * time.Second)
-	if (len(hsmQ) != 1) {
-		t.Errorf("ERROR: send_sm_req() didn't retry hsmReady-path request correctly.")
-	}
-
-	hsmReady = true
-	time.Sleep(7 * time.Second)
-	if (len(hsmQ) != 0) {
-		t.Errorf("ERROR: send_sm_req() didn't recover hsmReady-path request correctly.")
-	}
-
-	kill_sm_goroutines()
 }
 
 func Test_HbStates(t *testing.T) {
@@ -1311,6 +1227,323 @@ func Test_HbStateSingle(t *testing.T) {
 	if (rdata.Heartbeating == true) {
 		t.Errorf("ERROR, HB state for '%s' is heartbeating, should not be.",
 			rdata.XName)
+	}
+}
+
+func TestHBMapping(t *testing.T) {
+	hbi1 := hbinfo{Component: "x0c0s0b0n1", Last_hb_rcv_time: "00000001",
+	               Last_hb_timestamp: "00000001", Last_hb_status: "OK",}
+	hbi2 := hbinfo{Component: "x0c0s0b0n2", Last_hb_rcv_time: "00000002",
+	               Last_hb_timestamp: "00000002", Last_hb_status: "OK",}
+	hbi3 := hbinfo{Component: "x0c0s0b0n3", Last_hb_rcv_time: "00000003",
+	               Last_hb_timestamp: "00000003", Last_hb_status: "OK",}
+	hbi4 := hbinfo{Component: "x0c0s0b0n4", Last_hb_rcv_time: "00000004",
+	               Last_hb_timestamp: "00000004", Last_hb_status: "OK",}
+
+	kill_sm_goroutines()
+	go send_sm_req()
+
+	htrans.transport = &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+
+	htrans.client = &http.Client{Transport: htrans.transport,
+		Timeout: (20 * time.Second),
+	}
+	srv := httptest.NewServer(http.HandlerFunc(fakeHSMPatchHandler))
+
+	app_params.statemgr_url.string_param = srv.URL
+	app_params.statemgr_timeout.int_param = 5
+	app_params.nosm.int_param = 0
+	testMode = true
+	hsmReady = true
+
+	compLock.Lock()
+	hbMapLock.Lock()
+	startComps = []string{}
+	restartComps = []string{}
+	stopWarnComps = []string{}
+	stopErrorComps = []string{}
+	for k,_ := range(StartMap) {
+		StartMap[k] = 0
+	}
+	for k,_ := range(RestartMap) {
+		RestartMap[k] = 0
+	}
+	for k,_ := range(StopWarnMap) {
+		StopWarnMap[k] = 0
+	}
+	for k,_ := range(StopErrorMap) {
+		StopErrorMap[k] = 0
+	}
+	compLock.Unlock()
+	hbMapLock.Unlock()
+
+	is_setup = 0
+	one_time_setup()
+
+	testMode = true
+
+	hb_update_notify(&hbi1,HB_started)
+	hb_update_notify(&hbi2,HB_restarted_warn)
+	hb_update_notify(&hbi3,HB_stopped_warn)
+	hb_update_notify(&hbi4,HB_stopped_error)
+
+	//Conflicts
+	hb_update_notify(&hbi1,HB_restarted_warn)
+	hb_update_notify(&hbi2,HB_stopped_warn)
+	hb_update_notify(&hbi3,HB_stopped_error)
+	hb_update_notify(&hbi4,HB_started)
+
+	setSMRVal(http.StatusOK)
+	hsmUpdateQ <-HSMQ_NEW
+	time.Sleep(2 * time.Second)
+
+	//Check if we got the results we wanted.
+
+	if (len(startComps) == 0) {
+		t.Fatalf("No 'start' components found.")
+	}
+	if (len(restartComps) == 0) {
+		t.Fatalf("No 'restart' components found.")
+	}
+	if (len(stopWarnComps) == 0) {
+		t.Fatalf("No 'stop-warn' components found.")
+	}
+	if (len(stopErrorComps) == 0) {
+		t.Fatalf("No 'stop-error' components found.")
+	}
+
+	if (len(startComps) > 1) {
+		t.Errorf("Too many 'start' components (%d), expected 1.",len(startComps))
+	}
+	if (len(restartComps) > 1) {
+		t.Errorf("Too many 'restart' components (%d), expected 1.",len(restartComps))
+	}
+	if (len(stopWarnComps) > 1) {
+		t.Errorf("Too many 'stopWarnComps' components (%d), expected 1.",len(stopWarnComps))
+	}
+	if (len(stopErrorComps) > 1) {
+		t.Errorf("Too many 'stopErrorComps' components (%d), expected 1.",len(stopErrorComps))
+	}
+
+	if (startComps[0] != hbi4.Component) {
+		t.Errorf("HB start not found on '%s'",hbi4.Component)
+	}
+	if (restartComps[0] != hbi1.Component) {
+		t.Errorf("HB restart not found on '%s'",hbi1.Component)
+	}
+	if (stopWarnComps[0] != hbi2.Component) {
+		t.Errorf("HB stop-warning not found on '%s'",hbi2.Component)
+	}
+	if (stopErrorComps[0] != hbi3.Component) {
+		t.Errorf("HB stop-error not found on '%s'",hbi3.Component)
+	}
+
+	//Make sure global maps are cleared
+
+	nitems := 0
+	for _,v := range(StartMap) {
+		if (v != 0) {
+			nitems ++
+		}
+	}
+	if (nitems > 0) {
+		t.Errorf("Global Start Map is not cleared.")
+	}
+	nitems = 0
+	for _,v := range(RestartMap) {
+		if (v != 0) {
+			nitems ++
+		}
+	}
+	if (nitems > 0) {
+		t.Errorf("Global Restart Map is not cleared.")
+	}
+	nitems = 0
+	for _,v := range(StopWarnMap) {
+		if (v != 0) {
+			nitems ++
+		}
+	}
+	if (nitems > 0) {
+		t.Errorf("Global Stop Warning Map is not cleared.")
+	}
+	nitems = 0
+	for _,v := range(StopErrorMap) {
+		if (v != 0) {
+			nitems ++
+		}
+	}
+	if (nitems > 0) {
+		t.Errorf("Global Stop Error Map is not cleared.")
+	}
+}
+
+func TestHBMapping2(t *testing.T) {
+	hbi1 := hbinfo{Component: "x0c0s0b0n0", Last_hb_rcv_time: "00000000",
+	               Last_hb_timestamp: "00000000", Last_hb_status: "OK",}
+	hbi2 := hbinfo{Component: "x0c0s0b0n1", Last_hb_rcv_time: "00000001",
+	               Last_hb_timestamp: "00000001", Last_hb_status: "OK",}
+	hbi3 := hbinfo{Component: "x0c0s0b0n2", Last_hb_rcv_time: "00000002",
+	               Last_hb_timestamp: "00000002", Last_hb_status: "OK",}
+	hbi4 := hbinfo{Component: "x0c0s0b0n3", Last_hb_rcv_time: "00000003",
+	               Last_hb_timestamp: "00000003", Last_hb_status: "OK",}
+	hbi5 := hbinfo{Component: "x0c0s0b0n4", Last_hb_rcv_time: "00000004",
+	               Last_hb_timestamp: "00000004", Last_hb_status: "OK",}
+
+	kill_sm_goroutines()
+	go send_sm_req()
+
+	htrans.transport = &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+
+	htrans.client = &http.Client{Transport: htrans.transport,
+		Timeout: (20 * time.Second),
+	}
+	srv := httptest.NewServer(http.HandlerFunc(fakeHSMPatchHandler))
+
+	app_params.statemgr_url.string_param = srv.URL
+	app_params.statemgr_timeout.int_param = 5
+	app_params.nosm.int_param = 0
+	testMode = true
+	hsmReady = true
+
+	compLock.Lock()
+	startComps = []string{}
+	restartComps = []string{}
+	stopWarnComps = []string{}
+	stopErrorComps = []string{}
+	compLock.Unlock()
+
+	hb_update_notify(&hbi1,HB_started)
+	hb_update_notify(&hbi2,HB_restarted_warn)
+	hb_update_notify(&hbi3,HB_stopped_warn)
+	hb_update_notify(&hbi4,HB_stopped_error)
+
+	hb_update_notify(&hbi1,HB_restarted_warn)
+	hb_update_notify(&hbi2,HB_stopped_warn)
+	hb_update_notify(&hbi3,HB_stopped_error)
+	hb_update_notify(&hbi4,HB_started)
+
+	setSMRVal(http.StatusNotFound)
+	hsmUpdateQ <-HSMQ_NEW
+	time.Sleep(2 * time.Second)
+
+	//Check if we got the results we wanted.
+
+	if (len(startComps) != 0) {
+		t.Fatalf("'start' components incorrectly found.")
+	}
+	if (len(restartComps) != 0) {
+		t.Fatalf("No 'restart' components incorrectly found.")
+	}
+	if (len(stopWarnComps) != 0) {
+		t.Fatalf("No 'stop-warn' components incorrectly found.")
+	}
+	if (len(stopErrorComps) != 0) {
+		t.Fatalf("No 'stop-error' components incorrectly found.")
+	}
+
+	//Make sure global maps are NOT cleared
+
+	nitems := 0
+	for _,v := range(StartMap) {
+		if (v != 0) {
+			nitems ++
+		}
+	}
+	if (nitems != 0) {
+		t.Errorf("Global Start Map is not cleared.")
+	}
+	nitems = 0
+	for _,v := range(RestartMap) {
+		if (v != 0) {
+			nitems ++
+		}
+	}
+	if (nitems != 0) {
+		t.Errorf("Global Restart Map is not cleared.")
+	}
+	nitems = 0
+	for _,v := range(StopWarnMap) {
+		if (v != 0) {
+			nitems ++
+		}
+	}
+	if (nitems != 0) {
+		t.Errorf("Global Stop Warning Map is not cleared.")
+	}
+	nitems = 0
+	for _,v := range(StopErrorMap) {
+		if (v != 0) {
+			nitems ++
+		}
+	}
+	if (nitems != 0) {
+		t.Errorf("Global Stop Error Map is not cleared.")
+	}
+
+	//Now do it again making sure we get the "superset"
+
+	compLock.Lock()
+	startComps = []string{}
+	restartComps = []string{}
+	stopWarnComps = []string{}
+	stopErrorComps = []string{}
+	compLock.Unlock()
+
+	hb_update_notify(&hbi5,HB_started)
+
+	setSMRVal(http.StatusOK)
+	hsmUpdateQ <-HSMQ_NEW
+	time.Sleep(2 * time.Second)
+
+	//Check if we got the results we wanted.
+
+	if (len(startComps) == 0) {
+		t.Fatalf("No 'start' components found.")
+	}
+	if (len(restartComps) == 0) {
+		t.Fatalf("No 'restart' components found.")
+	}
+	if (len(stopWarnComps) == 0) {
+		t.Fatalf("No 'stop-warn' components found.")
+	}
+	if (len(stopErrorComps) == 0) {
+		t.Fatalf("No 'stop-error' components found.")
+	}
+
+	if (len(startComps) > 2) {
+		t.Errorf("Too many 'start' components (%d), expected 2.",len(startComps))
+	}
+	if (len(restartComps) > 1) {
+		t.Errorf("Too many 'restart' components (%d), expected 1.",len(restartComps))
+	}
+	if (len(stopWarnComps) > 1) {
+		t.Errorf("Too many 'stopWarnComps' components (%d), expected 1.",len(stopWarnComps))
+	}
+	if (len(stopErrorComps) > 1) {
+		t.Errorf("Too many 'stopErrorComps' components (%d), expected 1.",len(stopErrorComps))
+	}
+
+	if ((startComps[0] != hbi4.Component) &&
+	    (startComps[1] != hbi4.Component)) {
+		t.Errorf("HB start not found on '%s'",hbi4.Component)
+	}
+	if ((startComps[0] != hbi5.Component) &&
+	    (startComps[1] != hbi5.Component)) {
+		t.Errorf("HB start not found on '%s'",hbi5.Component)
+	}
+	if (restartComps[0] != hbi1.Component) {
+		t.Errorf("HB restart not found on '%s'",hbi1.Component)
+	}
+	if (stopWarnComps[0] != hbi2.Component) {
+		t.Errorf("HB stop-warning not found on '%s'",hbi2.Component)
+	}
+	if (stopErrorComps[0] != hbi3.Component) {
+		t.Errorf("HB stop-error not found on '%s'",hbi3.Component)
 	}
 }
 
