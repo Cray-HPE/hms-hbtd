@@ -135,7 +135,7 @@ type httpTrans struct {
 const (
 	SM_URL_BASE   = "http://localhost:27779/hsm/v1"
 	SM_URL_MID    = "State/Components"
-	SM_URL_SUFFIX = "StateData"
+	SM_URL_SUFFIX = "BulkStateData"
 	SM_URL_READY  = "service/ready"
 	SM_RETRIES    = 3
 	SM_TIMEOUT    = 10
@@ -996,7 +996,17 @@ func main() {
 	//Start the thread for handling state mgr messaging
 
 	go send_sm_req()
-	go send_sm_message()
+
+	// ** Used for testing only **
+	// Sync up to the wall clock so we start at XX:00:00
+	//for {
+	//	sec := time.Now().Second()
+	//	if (sec == 0) {
+	//		break
+	//	}
+	//	time.Sleep(10 * time.Millisecond)
+	//}
+	// **
 
 	// Start the heartbeat and param checker timers
 
