@@ -38,6 +38,7 @@ import (
     "sync"
 
     "github.com/gorilla/mux"
+    "stash.us.cray.com/HMS/hms-hmetcd"
 )
 
 /////////////////////////////////////////////////////////////////////////////
@@ -151,7 +152,7 @@ const HSMQ_NEW = 0x11223344
 
 // Chan/async Qs
 
-var hsmUpdateQ   = make(chan int, 50000)
+var hsmUpdateQ   = make(chan int, 100000)
 var telemetryQ   = make(chan telemetry_json_v1, 50000)
 var StartMap     = make(map[string]uint64)
 var RestartMap   = make(map[string]uint64)
@@ -596,9 +597,11 @@ func hb_checker () {
     var storeit bool
     var verr error
     var now,tdiff,lhbtime int64
+    var deleteKeys []string
+    var updateKeys []hmetcd.Kvi_KV
 
     if (app_params.debug_level.int_param > 1) {
-        hbtdPrintf("HB CHECKER.")
+        hbtdPrintf("HB CHECKER entry.")
     }
 
     ncomp := 0
@@ -606,6 +609,9 @@ func hb_checker () {
     // Grab the inter-process lock and get all keys/vals.  
 
     if (app_params.check_interval.int_param > 0) {
+        if (app_params.debug_level.int_param > 1) {
+            hbtdPrintf("Locking...")
+        }
         tstart := time.Now()
         lckerr := kvHandle.DistTimedLock(app_params.check_interval.int_param*2)
         tfin := time.Now()
@@ -624,6 +630,9 @@ func hb_checker () {
             }
             rearm_hbcheck_timer()
             return
+        }
+        if (app_params.debug_level.int_param > 1) {
+            hbtdPrintf("HB Checker lock acquired.")
         }
     }
 
@@ -706,10 +715,7 @@ func hb_checker () {
                 hb_update_notify(&nhb,HB_stopped_error)
 
                 //Since it's dead, take it out of the list.
-                verr = kvHandle.Delete(kv.Key)
-                if (verr != nil) {
-                    hbtdPrintln("ERROR deleting key '",kv.Key,"' from KV store: ",verr)
-                }
+                deleteKeys = append(deleteKeys,kv.Key)
                 ncomp --
                 continue
             }
@@ -739,14 +745,39 @@ func hb_checker () {
             if (err != nil) {
                 hbtdPrintln("INTERNAL ERROR marshaling JSON for ",nhb.Component,": ",err)
             } else {
-                merr := kvHandle.Store(nhb.Component,string(jstr))
-                if (merr != nil) {
-                    hbtdPrintln("INTERNAL ERROR storing key ",string(jstr),": ",merr);
-                }
+                updateKeys = append(updateKeys, hmetcd.Kvi_KV{Key: nhb.Component,
+                                    Value: string(jstr),})
             }
         }
     }
 
+    //Delete keys of dead HBs
+
+    if (app_params.debug_level.int_param > 1) {
+        hbtdPrintf("Deleting %d keys...",len(deleteKeys))
+    }
+    for _,dkey := range(deleteKeys) {
+        verr = kvHandle.Delete(dkey)
+        if (verr != nil) {
+            hbtdPrintln("ERROR deleting key '",dkey,"' from KV store: ",verr)
+        }
+    }
+
+    //Update keys that need updating
+
+    if (app_params.debug_level.int_param > 1) {
+        hbtdPrintf("Updating %d keys...",len(updateKeys))
+    }
+    for _,ukey := range(updateKeys) {
+        merr := kvHandle.Store(ukey.Key,ukey.Value)
+        if (merr != nil) {
+            hbtdPrintf("ERROR storing key '%s': %v",ukey.Key,merr)
+        }
+    }
+
+    if (app_params.debug_level.int_param > 1) {
+        hbtdPrintf("Unlocking...")
+    }
     if (app_params.check_interval.int_param > 0) {
         err := kvHandle.DistUnlock()
         if (err != nil) {

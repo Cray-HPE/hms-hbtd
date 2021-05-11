@@ -24,4 +24,4 @@ FROM cray/hms-hmi-service-build-base
 
 # Run unit tests...
 RUN set -ex \
-    && go test -v -o scsd stash.us.cray.com/HMS/hms-hmi-service/cmd/hmi-service
+    && go test -v  stash.us.cray.com/HMS/hms-hmi-service/cmd/hmi-service

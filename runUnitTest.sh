@@ -23,6 +23,6 @@
 # OTHER DEALINGS IN THE SOFTWARE.
 
 # Build the build base image
-docker build -t cray/hms-hmi-service-build-base -f Dockerfile.build-base .
+docker build --no-cache -t cray/hms-hmi-service-build-base -f Dockerfile.build-base .
 
-docker build -t cray/hms-hmi-service-testing -f Dockerfile.testing .
+docker build --no-cache -t cray/hms-hmi-service-testing -f Dockerfile.testing .
