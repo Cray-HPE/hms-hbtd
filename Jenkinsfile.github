@@ -15,7 +15,7 @@ pipeline {
         DESCRIPTION = "Cray HMS Hearbeat Tracking Service"
         IS_STABLE = getBuildIsStable()
         VERSION = getDockerBuildVersion(isStable: env.IS_STABLE)
-        DOCKER_ARGS = getDockerBuildArgs(name: env.NAME, description: env.DESCRIPTION)
+        DOCKER_ARGS = getDockerBuildArgs(name: env.NAME, description: env.DESCRIPTION, version: env.VERSION)
         CHART_NAME = "cray-hms-hbtd"
         CHART_VERSION = getChartVersion(version: env.VERSION)
     }
@@ -24,6 +24,12 @@ pipeline {
         stage("Image") {
             steps {
                 sh "make image"
+            }
+        }
+
+        stage("Chart") {
+            steps {
+                sh "make chart"
             }
         }
 

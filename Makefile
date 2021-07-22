@@ -18,14 +18,24 @@
 # ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 # OTHER DEALINGS IN THE SOFTWARE.
 
-NAME ?= hms-certs
+NAME ?= hms-hmi-service
 export VERSION ?= $(shell cat .version)-local
 DOCKER_IMAGE ?= ${NAME}:${VERSION}
+
+# Helm Chart
+CHART_PATH ?= kubernetes
+CHART_NAME ?= cray-hms-hbtd
+CHART_VERSION ?= local
+
 
 all: image test coverage
 
 image:
 	docker build --pull ${DOCKER_ARGS} --tag '${NAME}:${VERSION}' .
+
+chart:
+    helm dep up ${CHART_PATH}/${CHART_NAME}
+    helm package ${CHART_PATH}/${CHART_NAME} -d ${CHART_PATH}/.packaged --version ${CHART_VERSION}
 
 test:
 	./runUnitTest.sh
