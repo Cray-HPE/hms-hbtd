@@ -28,10 +28,10 @@ CHART_NAME ?= cray-hms-hbtd
 CHART_VERSION ?= local
 
 
-all: image test coverage
+all: image chart test coverage
 
 image:
-	docker build --pull ${DOCKER_ARGS} --tag '${NAME}:${VERSION}' .
+	docker build --rm --no-cache ${DOCKER_ARGS} --tag '${NAME}:${VERSION}' .
 
 chart:
 	helm dep up ${CHART_PATH}/${CHART_NAME}
