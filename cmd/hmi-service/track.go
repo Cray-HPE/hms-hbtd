@@ -31,14 +31,14 @@ import (
     "bytes"
     "context"
     "strconv"
-    "stash.us.cray.com/HMS/hms-base"
+    "github.com/Cray-HPE/hms-base"
     "reflect"
     "fmt"
     "os"
     "sync"
 
     "github.com/gorilla/mux"
-    "stash.us.cray.com/HMS/hms-hmetcd"
+    "github.com/Cray-HPE/hms-hmetcd"
 )
 
 /////////////////////////////////////////////////////////////////////////////
