@@ -11,7 +11,7 @@ pipeline {
     }
 
     environment {
-        NAME = "hms-hmi-service"
+        NAME = "cray-hbtd"
         DESCRIPTION = "Cray HMS Hearbeat Tracking Service"
         IS_STABLE = getBuildIsStable()
         VERSION = getDockerBuildVersion(isStable: env.IS_STABLE)
