@@ -15,7 +15,7 @@ pipeline {
         DESCRIPTION = "Cray HMS Hearbeat Tracking Service"
         IS_STABLE = getBuildIsStable()
         VERSION = getDockerBuildVersion(isStable: env.IS_STABLE)
-        DOCKER_ARGS = getDockerBuildArgs(name: "hms-hbtd, description: env.DESCRIPTION, version: env.VERSION)
+        DOCKER_ARGS = getDockerBuildArgs(name: "hms-hbtd", description: env.DESCRIPTION, version: env.VERSION)
         CHART_NAME = "cray-hms-hbtd"
         CHART_VERSION = getChartVersion(version: env.VERSION)
     }
