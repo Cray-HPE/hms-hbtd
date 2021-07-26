@@ -1,6 +1,6 @@
 # MIT License
 #
-# (C) Copyright [2020-2021] Hewlett Packard Enterprise Development LP
+# (C) Copyright [2019-2021] Hewlett Packard Enterprise Development LP
 #
 # Permission is hereby granted, free of charge, to any person obtaining a
 # copy of this software and associated documentation files (the "Software"),
@@ -20,8 +20,10 @@
 # ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 # OTHER DEALINGS IN THE SOFTWARE.
 
-FROM cray/hms-hmi-service-build-base
+# Dockerfile for running testing coverage on base HMS code.
 
-# Run test coverage...
+FROM cray/hms-base-build-base
+
+# Run coverage.
 RUN set -ex \
-    && go test -cover -v github.com/Cray-HPE/hms-hmi-service/cmd/hmi-service
+    && go test -cover -v github.com/Cray-HPE/hms-base/...
