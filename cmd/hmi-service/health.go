@@ -31,7 +31,7 @@ import (
 	"net/http"
 	"time"
 
-	"stash.us.cray.com/HMS/hms-base"
+	"github.com/Cray-HPE/hms-base"
 )
 
 // HealthResponse - used to report service health stats

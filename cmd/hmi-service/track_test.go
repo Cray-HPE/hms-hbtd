@@ -37,8 +37,8 @@ import (
     "encoding/json"
     "crypto/tls"
     "regexp"
-    "stash.us.cray.com/HMS/hms-base"
-    "stash.us.cray.com/HMS/hms-hmetcd"
+    "github.com/Cray-HPE/hms-base"
+    "github.com/Cray-HPE/hms-hmetcd"
     "github.com/gorilla/mux"
 )
 

@@ -35,28 +35,28 @@ FROM build-base AS base
 RUN go env -w GO111MODULE=auto
 
 # Copy all the necessary files to the image.
-COPY cmd $GOPATH/src/stash.us.cray.com/HMS/hms-hmi-service/cmd
-COPY vendor $GOPATH/src/stash.us.cray.com/HMS/hms-hmi-service/vendor
+COPY cmd $GOPATH/src/github.com/Cray-HPE/hms-hmi-service/cmd
+COPY vendor $GOPATH/src/github.com/Cray-HPE/hms-hmi-service/vendor
 
 
 ### UNIT TEST Stage ###
 FROM base AS testing
 
 # Run unit tests...
-CMD ["sh", "-c", "set -ex && go test -v stash.us.cray.com/HMS/hms-hmi-service/cmd/hmi-service"]
+CMD ["sh", "-c", "set -ex && go test -v github.com/Cray-HPE/hms-hmi-service/cmd/hmi-service"]
 
 
 ### COVERAGE Stage ###
 FROM base AS coverage
 
 # Run test coverage...
-CMD ["sh", "-c", "set -ex && go test -cover -v stash.us.cray.com/HMS/hms-hmi-service/cmd/hmi-service"]
+CMD ["sh", "-c", "set -ex && go test -cover -v github.com/Cray-HPE/hms-hmi-service/cmd/hmi-service"]
 
 
 ### Build Stage ###
 FROM base AS builder
 
-RUN set -ex && go build -v -i -o /usr/local/bin/hbtd stash.us.cray.com/HMS/hms-hmi-service/cmd/hmi-service
+RUN set -ex && go build -v -i -o /usr/local/bin/hbtd github.com/Cray-HPE/hms-hmi-service/cmd/hmi-service
 
 
 ### Final Stage ###
