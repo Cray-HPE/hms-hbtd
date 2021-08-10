@@ -66,7 +66,7 @@ EXPOSE 28500
 STOPSIGNAL SIGTERM
 
 RUN set -ex \
-    && apk update \
+    && apk -U upgrade \
     && apk add --no-cache curl
 
 # Copy the final binary.  To use hmi-service as the daemon name rather
