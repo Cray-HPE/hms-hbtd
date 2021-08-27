@@ -22,6 +22,7 @@
 
 # Dockerfile for building hms-hmi-service.
 
+### build-base stage ###
 # Build base just has the packages installed we need.
 FROM arti.dev.cray.com/baseos-docker-master-local/golang:1.16-alpine3.13 AS build-base
 
@@ -29,6 +30,7 @@ RUN set -ex \
     && apk -U upgrade \
     && apk add build-base
 
+### base stage ###
 # Base copies in the files we need to test/build.
 FROM build-base AS base
 
@@ -89,5 +91,8 @@ ENV TELEMETRY_HOST="cluster-kafka-bootstrap.sma.svc.cluster.local:9092:cray-hmsh
 # using other env vars.
 
 ENV KV_URL=
+
+# nobody 65534:65534
+USER 65534:65534
 
 CMD ["sh", "-c", "hbtd --debug=$DEBUG --errtime=$ERRTIME --warntime=$WARNTIME --sm_url=$SM_URL --kv_url=$KV_URL --use_telemetry=$USE_TELEMETRY --telemetry_host=$TELEMETRY_HOST" ]
