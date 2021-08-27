@@ -28,10 +28,10 @@ CHART_NAME ?= cray-hms-hbtd
 CHART_VERSION ?= $(shell cat .version)
 
 
-all: image chart test coverage
+all: image chart test
 
 image:
-	docker build --rm --no-cache ${DOCKER_ARGS} --tag '${NAME}:${VERSION}' .
+	docker build ${NO_CACHE} --rm --no-cache ${DOCKER_ARGS} --tag '${NAME}:${VERSION}' .
 
 chart:
 	helm repo add cray-algol60 https://artifactory.algol60.net/artifactory/csm-helm-charts
@@ -40,7 +40,4 @@ chart:
 
 test:
 	./runUnitTest.sh
-
-coverage:
-	./runCoverage.sh
 
