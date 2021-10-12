@@ -1,3 +1,5 @@
+# MIT License
+#
 # (C) Copyright 2021 Hewlett Packard Enterprise Development LP
 #
 # Permission is hereby granted, free of charge, to any person obtaining a
@@ -18,6 +20,7 @@
 # ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 # OTHER DEALINGS IN THE SOFTWARE.
 
+# Service
 NAME ?= hms-hmi-service
 export VERSION ?= $(shell cat .version)-local
 DOCKER_IMAGE ?= ${NAME}:${VERSION}
@@ -27,8 +30,18 @@ CHART_PATH ?= kubernetes
 CHART_NAME ?= cray-hms-hbtd
 CHART_VERSION ?= $(shell cat .version)
 
+# Common RPM variable
+BUILD_METADATA ?= "1~development~$(shell git rev-parse --short HEAD)"
 
-all: image chart test
+# CT Test RPM
+TEST_SPEC_NAME ?= hms-hbtd-ct-test
+TEST_RPM_VERSION ?= $(shell cat .version)
+TEST_SPEC_FILE ?= ${TEST_SPEC_NAME}.spec
+TEST_SOURCE_NAME ?= ${TEST_SPEC_NAME}-${TEST_RPM_VERSION}
+TEST_BUILD_DIR ?= $(PWD)/dist/hbtd-ct-test-rpmbuild
+TEST_SOURCE_PATH := ${TEST_BUILD_DIR}/SOURCES/${TEST_SOURCE_NAME}.tar.bz2
+
+all: image chart test test_rpm
 
 image:
 	docker build ${NO_CACHE} --rm --no-cache ${DOCKER_ARGS} --tag '${NAME}:${VERSION}' .
@@ -41,3 +54,18 @@ chart:
 test:
 	./runUnitTest.sh
 
+test_rpm: test_rpm_prepare test_rpm_package_source test_rpm_build_source test_rpm_build
+
+test_rpm_prepare:
+	rm -rf $(TEST_BUILD_DIR)
+	mkdir -p $(TEST_BUILD_DIR)/SPECS $(TEST_BUILD_DIR)/SOURCES
+	cp $(TEST_SPEC_FILE) $(TEST_BUILD_DIR)/SPECS/
+
+test_rpm_package_source:
+	tar --transform 'flags=r;s,^,/$(TEST_SOURCE_NAME)/,' --exclude .git --exclude dist -cvjf $(TEST_SOURCE_PATH) ./${TEST_SPEC_FILE} ./tests/ct ./LICENSE
+
+test_rpm_build_source:
+	BUILD_METADATA=$(BUILD_METADATA) rpmbuild -ts $(TEST_SOURCE_PATH) --define "_topdir $(TEST_BUILD_DIR)"
+
+test_rpm_build:
+	BUILD_METADATA=$(BUILD_METADATA) rpmbuild -ba $(TEST_SPEC_FILE) --define "_topdir $(TEST_BUILD_DIR)" --nodeps
