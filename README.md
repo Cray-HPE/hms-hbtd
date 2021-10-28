@@ -95,6 +95,12 @@ Then run (add `-d` to the arguments list of `docker run` to run in detached/back
 docker run -p 28500:28500 --name hbtd cray/hbtd:test
 ```
 
+### hbtd CT Testing
+
+This repository builds and publishes hms-hbtd-ct-test RPMs along with the service itself containing tests that verify hbtd on the
+NCNs of live Shasta systems. The tests require the hms-ct-test-base RPM to also be installed on the NCNs in order to execute.
+The version of the test RPM installed on the NCNs should always match the version of hbtd deployed on the system.
+
 ## Feature Map
 
 | V1 Feature | V1+ Feature | XC Equivalent |
