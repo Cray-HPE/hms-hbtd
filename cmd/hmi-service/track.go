@@ -808,7 +808,9 @@ func hb_checker () {
 func hbRcv(w http.ResponseWriter, r *http.Request) {
     var hbb hbinfo
 
-    errinst := "/"+URL_HEARTBEAT
+    errinst := URL_HEARTBEAT
+    mvars := mux.Vars(r)
+    xname,hasXName := mvars["xname"]
 
     //TODO: this logic will change if we need to support GET operations.
 
@@ -937,6 +939,15 @@ func hbRcv(w http.ResponseWriter, r *http.Request) {
     if (app_params.debug_level.int_param > 1) {
         hbtdPrintf("HB received for: '%s'",jdata.Component)
     }
+
+    //If caller used /{xname} API make sure the component matches the given
+    //XName.  If not, someone is doing something un-toward.  Log this.
+
+    if (hasXName && (xname != jdata.Component)) {
+        hbtdPrintf("WARNING: component in /heartbeat/{xname} (%s) API doesn't match HB component (%s)!  May be a security issue.",
+            xname,jdata.Component)
+    }
+
     newkey := 0
     kval,kok,kerr := kvHandle.Get(jdata.Component)
     if (kerr != nil) {
@@ -1013,7 +1024,7 @@ func hbRcv(w http.ResponseWriter, r *http.Request) {
 
 func paramsIO(w http.ResponseWriter, r *http.Request) {
     var rparams []byte
-    errinst := "/"+URL_PARAMS
+    errinst := URL_PARAMS
 
     if (r.Method == "PATCH") {
         body,err := ioutil.ReadAll(r.Body)
@@ -1152,7 +1163,7 @@ func hbStates(w http.ResponseWriter, r *http.Request) {
 	var rspData hbStatesRsp
 	var rspSingle hbSingleStateRsp
 
-	errinst := "/"+URL_HB_STATES
+	errinst := URL_HB_STATES
 	body,err := ioutil.ReadAll(r.Body)
 
 	if (err != nil) {
@@ -1211,9 +1222,9 @@ func hbStates(w http.ResponseWriter, r *http.Request) {
 func hbStateSingle(w http.ResponseWriter, r *http.Request) {
 	var rspSingle hbSingleStateRsp
 
-    vars := mux.Vars(r)
-    targ := base.NormalizeHMSCompID(vars["xname"])
-	errinst := "/"+URL_HB_STATE+"/"+targ
+	vars := mux.Vars(r)
+	targ := base.NormalizeHMSCompID(vars["xname"])
+	errinst := URL_HB_STATE+"/"+targ
 	now := time.Now().Unix()
 
 	isHB,pdet := isHeartbeating(targ,now,errinst)
