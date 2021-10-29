@@ -69,6 +69,10 @@ info:
     a warning ("node might be dead") followed later by a heartbeat-stopped
     message to HSM with an alert ("node is dead").
 
+    #### POST /heartbeat/{xname}
+
+    Same as /heartbeat, but allows better security via gateway filtering options.
+
     ### Query Heartbeat Status of Requested Components
 
     #### POST /hbstates
@@ -109,6 +113,46 @@ paths:
         heartbeat information is sent to the heartbeat tracker service. Changes
         in heartbeat behavior are communicated to the Hardware State Manager.
       operationId: TrackHeartbeat
+      responses:
+        '200':
+          $ref: '#/components/responses/status_200'
+        '400':
+          $ref: '#/components/responses/status_hb_400'
+        '401':
+          $ref: '#/components/responses/status_401'
+        '404':
+          $ref: '#/components/responses/status_404'
+        '405':
+          $ref: '#/components/responses/status_hb_405'
+        default:
+          description: Unexpected error
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/heartbeat'
+        required: true
+  '/heartbeat/{xname}':
+    parameters:
+      - in: path
+        name: xname
+        required: true
+        schema:
+          $ref: '#/components/schemas/XName.1.0.0'
+    post:
+      summary: Send a heartbeat message
+      tags:
+        - heartbeat
+      description: >-
+        Send a heartbeat message from a managed component like compute node to
+        the heartbeat tracker service. To do so, a JSON object that contains the
+        heartbeat information is sent to the heartbeat tracker service. Changes
+        in heartbeat behavior are communicated to the Hardware State Manager.
+      operationId: TrackHeartbeatByXName
       responses:
         '200':
           $ref: '#/components/responses/status_200'
