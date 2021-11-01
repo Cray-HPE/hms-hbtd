@@ -35,6 +35,7 @@ import (
     "reflect"
     "fmt"
     "os"
+    "strings"
     "sync"
 
     "github.com/gorilla/mux"
@@ -58,10 +59,15 @@ type hbinfo struct {
 // Heartbeat JSON.  This is the HB message format, which must follow all
 // versioning constraints.
 
-type hbjson_v1 struct {
+type hbjson_full_v1 struct {
     Component string `json:"Component"`
     Hostname string  `json:"Hostname"`
     NID string       `json:"NID"`
+    Status string    `json:"Status"`
+    Timestamp string `json:"Timestamp"`
+}
+
+type hbjson_v1 struct {
     Status string    `json:"Status"`
     Timestamp string `json:"Timestamp"`
 }
@@ -800,17 +806,90 @@ func hb_checker () {
     rearm_hbcheck_timer()
 }
 
+// Convenience function.  Update the time stamp and associated info for this 
+// component.
+//
+// TODO: maybe we don't mess with unmarshalling the KV HB data -- we pretty
+// much just overwrite it anyway.  But, doing it this way makes it easy
+// to do any data compares from the previous HB if we want to.
+
+func updateHB(errinst, xname, timestamp, status string, w http.ResponseWriter) {
+    var hbb hbinfo
+
+    newkey := 0
+    kval,kok,kerr := kvHandle.Get(xname)
+    if (kerr != nil) {
+        hbtdPrintf("Error reading KV key for: '%s', '%v'",xname,kerr)
+    }
+
+    if ((kok == false) || (kerr != nil)) {
+        //Key does not exist.  Create it.
+        newkey = 1
+
+        hbb.Component = xname
+    } else {
+        //Key exists, just update the time stamp and status.
+
+        umerr := json.Unmarshal([]byte(kval),&hbb)
+        if (umerr != nil) {
+            hbtdPrintln("INTERNAL ERROR unmarshalling '",kval,"': ",umerr)
+            pdet := base.NewProblemDetails("about:blank",
+                                           "Internal Server Error",
+                                           "Error unmarshalling JSON string",
+                                           errinst,http.StatusInternalServerError)
+            base.SendProblemDetails(w,pdet,0)
+            return
+        }
+    }
+
+    hbb.Last_hb_rcv_time = strconv.FormatUint(uint64(time.Now().Unix()),16)
+    hbb.Last_hb_timestamp = timestamp
+    hbb.Last_hb_status = status
+
+    //Special case: if this heartbeat record Had_warning flag shows a coverage
+    //gap, set it to a normal warning so the checker handles is correctly.
+
+    if (hbb.Had_warning == HB_WARN_GAP) {
+        hbb.Had_warning = HB_WARN_NORMAL
+    }
+
+    jstr, jerr := json.Marshal(hbb)
+    if (jerr != nil) {
+        hbtdPrintln("INTERNAL ERROR marshaling JSON: ",jerr);
+        pdet := base.NewProblemDetails("about:blank",
+                                       "Internal Server Error",
+                                       "Error marshalling JSON data",
+                                       errinst,http.StatusInternalServerError)
+        base.SendProblemDetails(w,pdet,0)
+        return
+    }
+
+    merr := kvHandle.Store(xname,string(jstr))
+    if (merr != nil) {
+        hbtdPrintln("INTERNAL ERROR storing key ",string(jstr),": ",merr);
+        pdet := base.NewProblemDetails("about:blank",
+                                       "Internal Server Error",
+                                       "Key/Value service store operation failed",
+                                       errinst,http.StatusInternalServerError)
+        base.SendProblemDetails(w,pdet,0)
+        return
+    }
+
+    if (newkey != 0) {
+        //Send notification of a new HB startup
+        hbtdPrintf("INFO: Heartbeat started for '%s'\n",hbb.Component)
+        hb_update_notify(&hbb,HB_started)
+    }
+}
+
+
 /////////////////////////////////////////////////////////////////////////////
 // Callback from the server loop when a HB request comes in.
 //
 /////////////////////////////////////////////////////////////////////////////
 
 func hbRcv(w http.ResponseWriter, r *http.Request) {
-    var hbb hbinfo
-
-    errinst := "/"+URL_HEARTBEAT
-
-    //TODO: this logic will change if we need to support GET operations.
+    errinst := URL_HEARTBEAT
 
     if (r.Method != "POST") {
         hbtdPrintf("ERROR: request is not a POST.\n")
@@ -825,7 +904,7 @@ func hbRcv(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    var jdata hbjson_v1
+    var jdata hbjson_full_v1
     body,err := ioutil.ReadAll(r.Body)
     err = json.Unmarshal(body,&jdata)
 
@@ -925,86 +1004,120 @@ func hbRcv(w http.ResponseWriter, r *http.Request) {
             jdata.Timestamp)
     }
 
-    //We have everything we need.  Update the time stamp for this component
-    //and also update the information sent by the component.  If the KV store
-    //service is slow or stalls, it won't interfere with other HB arrivals since
-    //this is a parallel GO routine.
-    //
-    //TODO: maybe we don't mess with unmarshalling the KV HB data -- we pretty
-    //much just overwrite it anyway.  But, doing it this way makes it easy
-    //to do any data compares from the previous HB if we want to.
-
     if (app_params.debug_level.int_param > 1) {
         hbtdPrintf("HB received for: '%s'",jdata.Component)
     }
-    newkey := 0
-    kval,kok,kerr := kvHandle.Get(jdata.Component)
-    if (kerr != nil) {
-        hbtdPrintf("Error reading KV key for: '%s', '%v'",jdata.Component,kerr)
-    }
 
-    if ((kok == false) || (kerr != nil)) {
-        //Key does not exist.  Create it.
-        newkey = 1
+    //Update the time stamp and info for this component.
 
-        hbb.Component = jdata.Component
-    } else {
-        //Key exists, just update the time stamp and status.
+    updateHB(errinst,jdata.Component,jdata.Timestamp,jdata.Status,w)
+}
 
-        umerr := json.Unmarshal([]byte(kval),&hbb)
-        if (umerr != nil) {
-            hbtdPrintln("INTERNAL ERROR unmarshalling '",kval,"': ",umerr)
+func hbRcvXName(w http.ResponseWriter, r *http.Request) {
+    errinst := URL_HEARTBEAT
+    xname := mux.Vars(r)["xname"]
+    if (xname == "") {
+        //Should NOT happen, but if so, grab the end of the URL
+        toks := strings.Split(r.URL.Path,"/")
+        xn := base.NormalizeHMSCompID(toks[len(toks)-1])
+        if (xn == "") {
+            //Enforce valid XName
+            hbtdPrintf("ERROR: request is not a POST.\n")
             pdet := base.NewProblemDetails("about:blank",
-                                           "Internal Server Error",
-                                           "Error unmarshalling JSON string",
-                                           errinst,http.StatusInternalServerError)
+                                       "Invalid Request",
+                                       "Only POST operations supported",
+                                       errinst,http.StatusMethodNotAllowed)
             base.SendProblemDetails(w,pdet,0)
             return
         }
-    }
+		xname = xn
+	}
 
-    hbb.Last_hb_rcv_time = strconv.FormatUint(uint64(time.Now().Unix()),16)
-    hbb.Last_hb_timestamp = jdata.Timestamp
-    if (jdata.Status != "") {
-        hbb.Last_hb_status = jdata.Status
-    } else {
-        hbb.Last_hb_status = ""
-    }
-
-    //Special case: if this heartbeat record Had_warning flag shows a coverage
-    //gap, set it to a normal warning so the checker handles is correctly.
-
-    if (hbb.Had_warning == HB_WARN_GAP) {
-        hbb.Had_warning = HB_WARN_NORMAL
-    }
-
-    jstr, jerr := json.Marshal(hbb)
-    if (jerr != nil) {
-        hbtdPrintln("INTERNAL ERROR marshaling JSON: ",jerr);
+    if (r.Method != "POST") {
+        hbtdPrintf("ERROR: request is not a POST.\n")
         pdet := base.NewProblemDetails("about:blank",
-                                       "Internal Server Error",
-                                       "Error marshalling JSON data",
-                                       errinst,http.StatusInternalServerError)
+                                       "Invalid Request",
+                                       "Only POST operations supported",
+                                       errinst,http.StatusMethodNotAllowed)
+
+        //It is required to have an "Allow:" header with this error
+        w.Header().Add("Allow","POST")
         base.SendProblemDetails(w,pdet,0)
         return
     }
 
-    merr := kvHandle.Store(jdata.Component,string(jstr))
-    if (merr != nil) {
-        hbtdPrintln("INTERNAL ERROR storing key ",string(jstr),": ",merr);
+    var jdata hbjson_v1
+    body,err := ioutil.ReadAll(r.Body)
+    err = json.Unmarshal(body,&jdata)
+
+    if (err != nil) {
+        var v map[string]interface{}
+
+        //The Unmarshal failed, find out which field(s) specifically failed.
+        //There's no quick-n-dirty way to do this so we'll just bulldoze
+        //through each field and verify it.
+
+        errstr := "Invalid JSON data type"
+        errb := json.Unmarshal(body,&v)
+        if (errb != nil) {
+            hbtdPrintln("Unmarshal into map[string]interface{} didn't work:",errb)
+        } else {
+            //Figure out what field(s) == bad and report them.  For now, they're
+            //all strings.
+
+            mtype := reflect.TypeOf(jdata)
+            for i := 0; i < mtype.NumField(); i ++ {
+                nm := mtype.Field(i).Name
+                if (v[nm] == nil) {
+                    continue
+                }
+                _,ok := v[nm].(string)  //for now everything is strings.
+                if (!ok) {
+                    errstr = fmt.Sprintf("Invalid data type in %s field",nm)
+                    break
+                }
+            }
+        }
+        hbtdPrintln("Bad heartbeat JSON decode:",err);
         pdet := base.NewProblemDetails("about:blank",
-                                       "Internal Server Error",
-                                       "Key/Value service store operation failed",
-                                       errinst,http.StatusInternalServerError)
+                                       "Invalid Request",
+                                       errstr,
+                                       errinst,http.StatusBadRequest)
         base.SendProblemDetails(w,pdet,0)
         return
     }
 
-    if (newkey != 0) {
-        //Send notification of a new HB startup
-        hbtdPrintf("INFO: Heartbeat started for '%s'\n",hbb.Component)
-        hb_update_notify(&hbb,HB_started)
+    //Check all the fields to be sure they are valid.  
+
+    ferrstr := ""
+    if (jdata.Status == "") {
+        ferrstr = "Missing Status field"
+    } else if (jdata.Timestamp == "") {
+        ferrstr = "Missing Timestamp field"
     }
+
+    if (ferrstr != "") {
+        hbtdPrintf("Incomplete heartbeat JSON: %s\n",ferrstr);
+        pdet := base.NewProblemDetails("about:blank",
+                                       "Invalid Request",
+                                       ferrstr,
+                                       errinst,http.StatusBadRequest)
+        base.SendProblemDetails(w,pdet,0)
+        return
+    }
+
+    if (app_params.debug_level.int_param > 0) {
+        hbtdPrintf("Heartbeat: Status: %s, time: %s\n",
+            jdata.Status,jdata.Timestamp)
+    }
+
+    //Update the time stamp and info for this component.
+
+    if (app_params.debug_level.int_param > 1) {
+        hbtdPrintf("HB received for: '%s'",xname)
+    }
+
+    updateHB(errinst,xname,jdata.Timestamp,jdata.Status,w)
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -1013,7 +1126,7 @@ func hbRcv(w http.ResponseWriter, r *http.Request) {
 
 func paramsIO(w http.ResponseWriter, r *http.Request) {
     var rparams []byte
-    errinst := "/"+URL_PARAMS
+    errinst := URL_PARAMS
 
     if (r.Method == "PATCH") {
         body,err := ioutil.ReadAll(r.Body)
@@ -1152,7 +1265,7 @@ func hbStates(w http.ResponseWriter, r *http.Request) {
 	var rspData hbStatesRsp
 	var rspSingle hbSingleStateRsp
 
-	errinst := "/"+URL_HB_STATES
+	errinst := URL_HB_STATES
 	body,err := ioutil.ReadAll(r.Body)
 
 	if (err != nil) {
@@ -1211,9 +1324,9 @@ func hbStates(w http.ResponseWriter, r *http.Request) {
 func hbStateSingle(w http.ResponseWriter, r *http.Request) {
 	var rspSingle hbSingleStateRsp
 
-    vars := mux.Vars(r)
-    targ := base.NormalizeHMSCompID(vars["xname"])
-	errinst := "/"+URL_HB_STATE+"/"+targ
+	vars := mux.Vars(r)
+	targ := base.NormalizeHMSCompID(vars["xname"])
+	errinst := URL_HB_STATE+"/"+targ
 	now := time.Now().Unix()
 
 	isHB,pdet := isHeartbeating(targ,now,errinst)

@@ -58,7 +58,7 @@ info:
 
     ### Send Heartbeat Status from a Component
 
-    #### POST /heartbeat
+    #### POST /heartbeat/{xname}
 
     Send a heartbeat message to the heartbeat tracker service with a JSON
     formatted payload. If it's the first heartbeat, it will send a
@@ -98,6 +98,46 @@ info:
   version: "1.0.0-oas3"
   title: Heartbeat Tracker Service
 paths:
+  '/heartbeat/{xname}':
+    parameters:
+      - in: path
+        name: xname
+        required: true
+        schema:
+          $ref: '#/components/schemas/XName.1.0.0'
+    post:
+      summary: Send a heartbeat message
+      tags:
+        - heartbeat
+      description: >-
+        Send a heartbeat message from a managed component like compute node to
+        the heartbeat tracker service. To do so, a JSON object that contains the
+        heartbeat information is sent to the heartbeat tracker service. Changes
+        in heartbeat behavior are communicated to the Hardware State Manager.
+      operationId: TrackHeartbeatXName
+      responses:
+        '200':
+          $ref: '#/components/responses/status_200'
+        '400':
+          $ref: '#/components/responses/status_hb_400'
+        '401':
+          $ref: '#/components/responses/status_401'
+        '404':
+          $ref: '#/components/responses/status_404'
+        '405':
+          $ref: '#/components/responses/status_hb_405'
+        default:
+          description: Unexpected error
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/heartbeat_xname'
+        required: true
   /heartbeat:
     post:
       summary: Send a heartbeat message
@@ -393,7 +433,7 @@ components:
     status_hb_400:
       description: >
         Bad Request. Malformed JSON.  Verify all JSON formatting in payload.
-        Verify that the xname/NID/hostname is properly set. 
+        Verify that the all entries are properly set. 
     status_pm_400:
       description: |
         Bad Request. Malformed JSON.  Verify all JSON formatting in payload.
@@ -476,6 +516,18 @@ components:
           $ref: '#/components/schemas/TimeStamp.1.0.0'
       required:
         - Component
+        - Status
+        - TimeStamp
+    heartbeat_xname:
+      title: Heartbeat Message
+      type: object
+      description: This is the JSON payload that describes a heartbeat message.
+      properties:
+        Status:
+          $ref: '#/components/schemas/HeartbeatStatus.1.0.0'
+        TimeStamp:
+          $ref: '#/components/schemas/TimeStamp.1.0.0'
+      required:
         - Status
         - TimeStamp
     hbstates:

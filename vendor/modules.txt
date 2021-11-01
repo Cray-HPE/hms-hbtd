@@ -45,6 +45,8 @@ github.com/golang/snappy
 # github.com/gorilla/mux v1.8.0
 ## explicit
 github.com/gorilla/mux
+# github.com/gorilla/websocket v1.4.1
+## explicit
 # github.com/hashicorp/go-cleanhttp v0.5.1
 github.com/hashicorp/go-cleanhttp
 # github.com/hashicorp/go-retryablehttp v0.5.4
