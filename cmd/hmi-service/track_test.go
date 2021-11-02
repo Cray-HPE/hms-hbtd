@@ -541,7 +541,7 @@ func TestHb_rcv(t *testing.T) {
     //Slop together JSON payloads for 2 heartbeating nodes
 
     req1_hb := bytes.NewBufferString(`{"Component":"x1c2s2b0n3","Hostname":"nid0001.us.cray.com","NID":"0001","Status":"OK","Timestamp":"Jan 1, 0000"}`)
-    req2_hb := bytes.NewBufferString(`{"Component":"x2c3s4b0n5","Hostname":"nid1234.us.cray.com","NID":"1234","Status":"OK","Timestamp":"Jan 2, 1000"}`)
+    req2_hb := bytes.NewBufferString(`{"Status":"OK","Timestamp":"Jan 2, 1000"}`)
 
     // Create 2 fake HTTP POSTs with the HB data in it
     req1, err1 := http.NewRequest("POST","http://localhost:8080/hmi/v1/heartbeat",req1_hb)
@@ -550,7 +550,7 @@ func TestHb_rcv(t *testing.T) {
         t.Fatal(err1)
     }
 
-    req2, err2 := http.NewRequest("POST","http://localhost:8080/hmi/v1/heartbeat",req2_hb)
+    req2, err2 := http.NewRequest("POST","http://localhost:8080/hmi/v1/heartbeat/x2c3s4b0n5",req2_hb)
 
     if (err2 != nil) {
         t.Fatal(err2)
@@ -559,22 +559,23 @@ func TestHb_rcv(t *testing.T) {
     // Set up to grab the "responses"
     rr := httptest.NewRecorder()
     handler := http.HandlerFunc(hbRcv)
+    handlerXName := http.HandlerFunc(hbRcvXName)
 
     // Mock up the first operation
     handler.ServeHTTP(rr,req1)
 
     // Check the return code
     if (rr.Code != http.StatusOK) {
-        t.Errorf("HTTP handler returned bad error code, bot %v, want %v",
+        t.Errorf("HTTP handler returned bad error code, got %v, want %v",
             rr.Code,http.StatusOK)
     }
 
     // Mock up the second operation
-    handler.ServeHTTP(rr,req2)
+    handlerXName.ServeHTTP(rr,req2)
 
     // Check the return code
     if (rr.Code != http.StatusOK) {
-        t.Errorf("HTTP handler returned bad error code, bot %v, want %v",
+        t.Errorf("HTTP handler returned bad error code, got %v, want %v",
             rr.Code,http.StatusOK)
     }
 
