@@ -24,8 +24,8 @@ cray-service:
     enforceAntiAffinity: "21000"
     resources:
       limits:
-        cpu:     4
-        memory:  8Gi
+        cpu: 4
+        memory: 8Gi
       requests:
         cpu: 10m
         memory: 64Mi
@@ -33,7 +33,8 @@ cray-service:
     cray-hbtd:
       name: "cray-hbtd"
       image:
-        repository: "cray/cray-hbtd"
+        repository: "artifactory.algol60.net/csm-docker/stable/cray-hbtd"
+        tag: 1.15.0
       ports:
         - name: http
           containerPort: 28500

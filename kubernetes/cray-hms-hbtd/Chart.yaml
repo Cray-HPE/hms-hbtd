@@ -1,5 +1,17 @@
-apiVersion: v1
-description: "Kubernetes resources for cray-hms-hbtd"
+apiVersion: v2
 name: "cray-hms-hbtd"
-home: "HMS/hms-hbtd"
-version: 1.14.0
+version: 1.15.0
+description: "Kubernetes resources for cray-hms-hbtd"
+home: "https://github.com/Cray-HPE/hms-hmi-service"
+sources:
+  - "https://github.com/Cray-HPE/hms-hmi-service"
+dependencies:
+  - name: cray-service
+    version: "~7.0.0"
+    repository: https://artifactory.algol60.net/artifactory/csm-helm-charts
+maintainers:
+  - name: Hardware Management
+    url: https://github.com/orgs/Cray-HPE/teams/hardware-management
+appVersion: "1.15.0"
+annotations:
+  artifacthub.io/images: ""
