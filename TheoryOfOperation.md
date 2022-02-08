@@ -20,9 +20,9 @@ HBTD is a stateless replicated microservice.  In order for any replica to be
 able to function autonomously and without regard to other replicas, the 
 heartbeat information is stored in ETCD.
 
-Heartbeats are sent to the */heartbeat* endpoint in the HBTD RESTful API.  
-Inbound heartbeats are load balanced by the Kubernetes network, so they
-are delivered to the HBTD replicas in a round-robin fashion.
+Heartbeats are sent to the */heartbeat* endpoints in the HBTD API.  
+Heartbeats sent by components are load balanced by the Kubernetes network, 
+so they are delivered to the HBTD replicas in a round-robin fashion.
 
 Upon receipt of a heartbeat, HBTD looks up the heartbeat record for that 
 node in ETCD.  If no record exists, one is created and a **Heartbeat
@@ -31,8 +31,12 @@ recorded and the record is stored in ETCD.
 
 HBTD employs a periodic heartbeat audit.   During this audit, all ETCD records
 are read in as a list.  For each record, the heartbeat's time stamp is compared
-to the current time, and if either of the timeouts is exceeded, a notification
-is sent to HSM.
+to the current time, and if the warning or alert timeouts are exceeded, a 
+notification is sent to HSM.
+
+The warning and alert timeouts can be changed on the fly using HBTD's
+*/params* API.  Using a PATCH operation, the values of *Errtime* and *Warntime*
+can be modified and will immediately become the new time measurement values.
 
 ### Dealing with HSM Communication Issues
 
@@ -76,6 +80,39 @@ There are 4 notifications sent to HSM:
 4. **Heartbeat Restarted**  This indicates that a node that had stopped
    heartbeating has started once again.  The node is put into READY with
    an OK flag.
+
+## REST API
+
+The REST API is described and specified in the swagger file located in 
+api/swagger.yaml in this repo.
+
+## Runtime Parameters
+
+As mentioned above, HBTD has adjustable runtime parameters, which can be
+changed via a PATCH operation to the */params* API.  The parameters are:
+
+```bash
+Debug         Debug logging level.  Default is 0.
+Errtime       Elapsed time from last heartbeat indicating an 
+                 alert/dead condition
+Warntime      Elapsed time from last heartbeat indicating a 
+                 warn/sick condition
+Interval      Time interval in seconds between heartbeat audits
+Sm_retries    Number of retries to attempt when contacting HSM
+Sm_timeout    Max number of seconds between HSM retries
+SM_url        URL of HSM API
+Use_telemetry Non-zero values cause telemetry to be used, 0 == no telemetry.
+```
+
+There are also parameters that are read-only at runtime, but are visible for
+informational purposes:
+
+```bash
+Kv_url          Key/value URL, e.g. http://cray-hbtd-etcd.client:2379
+Nosm            Do not contact HSM for any reason (testing only)
+Port            HTTP Port for HBTD to respond to
+Telemetry_host  Specification of telemetry host, e.g. <ipaddr>:port
+```
 
 ## Future Enhancements
 
