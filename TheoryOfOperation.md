@@ -14,6 +14,8 @@ node.  If the alert timeout is exceeded, then HSM is notified of an alert
 condition -- the node is "declared dead" and put into STANDBY state with
 an ALERT flag.
 
+![HBTD Block Diagram](HBTD_TOI.gif "HBTD Block Diagram")
+
 ## Method of Tracking
 
 HBTD is a stateless replicated microservice.  In order for any replica to be
