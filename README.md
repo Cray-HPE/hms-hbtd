@@ -21,6 +21,8 @@ Normally _hbtd_ runs on the SMS cluster as one or more Docker container
 instances managed by Kubernetes.  It can also be run from a command shell 
 for testing purposes.
 
+![HBTD Block Diagram](hbtd_block_diagram.png "HBTD Block Diagram")
+
 ## hbtd API
 
 _hbtd_'s RESTful API is as follows:
@@ -126,4 +128,7 @@ The version of the test RPM installed on the NCNs should always match the versio
 * Add API to query service health and connectivity
 * Add API to dump service internal
 
+## Further Information
+
+For more detailed information, see the [Theory Of Operation](TheoryOfOperation.md) document.
 
