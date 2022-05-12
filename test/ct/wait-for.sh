@@ -1,6 +1,8 @@
+#!/bin/bash
+
 # MIT License
 #
-# (C) Copyright [2021-2022] Hewlett Packard Enterprise Development LP
+# (C) Copyright [2022] Hewlett Packard Enterprise Development LP
 #
 # Permission is hereby granted, free of charge, to any person obtaining a
 # copy of this software and associated documentation files (the "Software"),
@@ -20,24 +22,27 @@
 # ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 # OTHER DEALINGS IN THE SOFTWARE.
 
-# Service
-NAME ?= hms-hmi-service
-VERSION ?= $(shell cat .version)
+# wait-for.sh; used by runCT.sh to make sure HSM has been populated with data before running.
+echo "Initiating..."
+URL="http://cray-smd:27779/hsm/v2/State/Components"
+sentry=1
+limit=200
+while :; do
+  length=$(curl --silent ${URL} | jq '.Components | length')
 
+  if [ ! -z "$length" ] && [ "$length" -gt "0" ]; then
+    echo $URL" is available"
+    break
+  fi
 
-all : image unittest ct snyk ct_image
+  if [ "$sentry" -gt "$limit" ]; then
+    echo "Failed to connect for $limit, exiting"
+    exit 1
+  fi
 
-image:
-	docker build ${NO_CACHE} --pull ${DOCKER_ARGS} --tag '${NAME}:${VERSION}' .
+  ((sentry++))
 
-unittest:
-	./runUnitTest.sh
+  echo $URL" is unavailable - sleeping"
+  sleep 1
 
-snyk:
-	./runSnyk.sh
-
-ct:
-	./runCT.sh
-
-ct_image:
-	docker build --no-cache -f test/ct/Dockerfile test/ct/ --tag hms-sls-test:${VERSION}
+done
