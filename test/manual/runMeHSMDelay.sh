@@ -1,5 +1,27 @@
 #!/bin/bash
-
+#
+# MIT License
+#
+# (C) Copyright [2022] Hewlett Packard Enterprise Development LP
+#
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included
+# in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+# THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+# OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+# ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+# OTHER DEALINGS IN THE SOFTWARE.
+#
 
 hbPld='{"Component":"AAAA", "Hostname": "BBBB", "NID": "CCCC", "Status": "OK", "Timestamp": "DDDD"}'
 ord=1
@@ -73,7 +95,7 @@ sleep 5 # T+10
 
 # T+10 no notifications
 
-curl -X PATCH -d '{"ComponentIDs":["STOP"]}' http://10.0.2.15:27999/hsm/v1/State/Components/BulkStateData
+curl -X PATCH -d '{"ComponentIDs":["PAUSE","20"]}' http://10.0.2.15:27999/hsm/v1/State/Components/BulkStateData
 
 # T+15 Detect 8 HB stopped, warning, errors sending
 # T+20 Re-attempt to send to HSM, will fail
@@ -85,18 +107,17 @@ hb x0c0s0b2n0 1008
 
 # T+21 x0c0s0b2n0 started.
 
-curl -X PATCH -d '{"ComponentIDs":["START"]}' http://10.0.2.15:27999/hsm/v1/State/Components/BulkStateData
+curl -X PATCH -d '{"ComponentIDs":["PAUSE","0"]}' http://10.0.2.15:27999/hsm/v1/State/Components/BulkStateData
 
-# T+25 8 HB restarted
+# T+25 8 HB restarted, x0c0s0b2n0 started to HSM
 # T+25 Re-send HB changes to HSM, should succeed
 
 sleep 7 # T+28
 sendhb
 
 # T+30 no notifications
-# T+35,  x0c0s0b2n0 overdue 14 sec WARN sent
-# T+40 8 HBs WARN
+# T+35 8 HB warns sent to HSM due to 20 second stall of HSM
+# T+35,  x0c0s0b2n0 overdue 14 sec WARN sent (should also see 8 HB warn to HSM)
+# T+40 8 HBs WARN (if missed in T+35)
 # T+55 x0c0s0b2n0 dead
 # T+60 8 HBs declared dead
-
-

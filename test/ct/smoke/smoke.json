@@ -1,0 +1,34 @@
+{
+  "smoke_test_name": "HBTD-smoke-tests",
+  "default_base_url": "http://cray-hbtd/",
+  "test_paths": [
+    {
+      "path": "hmi/v1/health",
+      "expected_status_code": 200,
+      "method": "GET",
+      "body": null,
+      "headers": {}
+    },
+    {
+      "path": "hmi/v1/liveness",
+      "expected_status_code": 204,
+      "method": "GET",
+      "body": null,
+      "headers": {}
+    },
+    {
+      "path": "hmi/v1/readiness",
+      "expected_status_code": 204,
+      "method": "GET",
+      "body": null,
+      "headers": {}
+    },
+    {
+      "path": "hmi/v1/params",
+      "expected_status_code": 200,
+      "method": "GET",
+      "body": null,
+      "headers": {}
+    }
+  ]
+}

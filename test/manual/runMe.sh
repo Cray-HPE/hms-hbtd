@@ -1,5 +1,27 @@
 #!/bin/bash
-
+#
+# MIT License
+#
+# (C) Copyright [2022] Hewlett Packard Enterprise Development LP
+#
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included
+# in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+# THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+# OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+# ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+# OTHER DEALINGS IN THE SOFTWARE.
+#
 
 hbPld='{"Component":"AAAA", "Hostname": "BBBB", "NID": "CCCC", "Status": "OK", "Timestamp": "DDDD"}'
 ord=1
@@ -143,7 +165,7 @@ hb x0c0s0b2n0 1008
 hb x0c0s0b2n1 1009
 
 # T+45 HB checker x0c0s0b2n3 overdue 10 sec WARN
-# T+50 HB checker 
+# T+50 HB checker
 # T+55 HB checker  1000-1009 overdue by 12 sec. x0c0s0b2n2 and x0c0s0b2n3
 #                  no warning because they are already in WARN
 # T+60 HB checker x0c0s0b2n2 late 33 sec ALERT
@@ -169,5 +191,3 @@ curl -X PATCH -d '{"ComponentIDs":["START"]}' http://10.0.2.15:27999/hsm/v1/Stat
 
 
 # Make HSM stall (kill -SIGSTOP); hurl more HBs; then fix HSM.
-
-
