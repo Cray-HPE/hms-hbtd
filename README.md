@@ -63,7 +63,7 @@ Usage: hbtd [options]
   --kv_url=url            Key-Value service 'base' URL..  
                               (Default: https://localhost:2379)
   --sm_url=url            State Manager 'base' URL.  
-                              (Default: http://localhost:27779/hsm/v1)
+                              (Default: http://localhost:27779/hsm/v2)
   --sm_retries=num        Number of State Manager access retries. (Default: 3)
   --sm_timeout=secs       State Manager access timeout. (Default: 10)
   --nosm                  Don't contact State Manager (for testing).

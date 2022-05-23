@@ -1,17 +1,17 @@
 // MIT License
-// 
+//
 // (C) Copyright [2018-2021] Hewlett Packard Enterprise Development LP
-// 
+//
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
 // to deal in the Software without restriction, including without limitation
 // the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the
 // Software is furnished to do so, subject to the following conditions:
-// 
+//
 // The above copyright notice and this permission notice shall be included
 // in all copies or substantial portions of the Software.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
@@ -19,8 +19,6 @@
 // OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 // ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 // OTHER DEALINGS IN THE SOFTWARE.
-
-
 
 // This is the main function and some support functions for the
 // Shasta node heartbeat tracker.
@@ -46,12 +44,12 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"syscall"
 	"path"
 	"reflect"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/Cray-HPE/hms-base"
@@ -118,7 +116,6 @@ type url_desc struct {
 	full_url    string
 }
 
-
 type httpTrans struct {
 	transport *http.Transport
 	client    *http.Client
@@ -133,7 +130,7 @@ type httpTrans struct {
 // reflect the real world default.
 
 const (
-	SM_URL_BASE   = "http://localhost:27779/hsm/v1"
+	SM_URL_BASE   = "http://localhost:27779/hsm/v2"
 	SM_URL_MID    = "State/Components"
 	SM_URL_SUFFIX = "BulkStateData"
 	SM_URL_READY  = "service/ready"
@@ -158,7 +155,7 @@ const (
 	HBTD_LIFE_KEY_START = 0
 	HBTD_LIFE_KEY_END   = (^uint32(0) >> 1)
 
-	URL_PORT      = "28500"
+	URL_PORT = "28500"
 )
 
 const HB_MSGBUS_TOPIC = "CrayHMSHeartbeatNotifications"
@@ -217,13 +214,12 @@ func initAppParams() {
 	}
 }
 
-
 /////////////////////////////////////////////////////////////////////////////
 // Print function to be used when the time stamp stuff is not needed.
 /////////////////////////////////////////////////////////////////////////////
 
 func plainPrint(format string, a ...interface{}) {
-	fmt.Printf(format,a...)
+	fmt.Printf(format, a...)
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -822,12 +818,12 @@ func openKV() {
 		kvHandle, kverr = hmetcd.Open(app_params.kv_url.string_param, "")
 		if kverr != nil {
 			hbtdPrintf("ERROR opening connection to ETCD (%s) (attempt %d): %v",
-				app_params.kv_url.string_param,ix,kverr)
+				app_params.kv_url.string_param, ix, kverr)
 		} else {
 			hbtdPrintf("ETCD connection succeeded.\n")
 			break
 		}
-		ix ++
+		ix++
 		time.Sleep(5 * time.Second)
 	}
 
@@ -840,9 +836,9 @@ func openKV() {
 			hbtdPrintf("K/V health check succeeded.\n")
 			break
 		}
-		hbtdPrintf("ERROR: K/V health key store failed, attempt %d.",ix)
+		hbtdPrintf("ERROR: K/V health key store failed, attempt %d.", ix)
 		time.Sleep(5 * time.Second)
-		ix ++
+		ix++
 	}
 }
 
@@ -855,7 +851,7 @@ func openKV() {
 
 func createInstanceKey() string {
 	rand.Seed(time.Now().UnixNano())
-	ikey := fmt.Sprintf("%s%d",HBTD_LIFE_KEY_PRE,rand.Int31())
+	ikey := fmt.Sprintf("%s%d", HBTD_LIFE_KEY_PRE, rand.Int31())
 	return ikey
 }
 
@@ -865,32 +861,32 @@ func createInstanceKey() string {
 // That info has to be deleted and re-discovered.
 
 func checkLifeKeys() {
-	lstart := HBTD_LIFE_KEY_PRE+fmt.Sprintf("%d",HBTD_LIFE_KEY_START)
-	lend   := HBTD_LIFE_KEY_PRE+fmt.Sprintf("%d",HBTD_LIFE_KEY_END)
+	lstart := HBTD_LIFE_KEY_PRE + fmt.Sprintf("%d", HBTD_LIFE_KEY_START)
+	lend := HBTD_LIFE_KEY_PRE + fmt.Sprintf("%d", HBTD_LIFE_KEY_END)
 
-	kvlist,kverr := kvHandle.GetRange(lstart,lend)
-	if (kverr != nil) {
+	kvlist, kverr := kvHandle.GetRange(lstart, lend)
+	if kverr != nil {
 		hbtdPrintf("ERROR: Can't retrieve life keys: %v\nAssuming the worst,deleting all HB key info.")
 		staleKeys = true
 	} else {
-		if (len(kvlist) == 0) {
+		if len(kvlist) == 0 {
 			hbtdPrintf("INFO: No life keys found, HB key cleanup set to: %d.",
 				app_params.clear_on_gap.int_param)
 			staleKeys = true
 		}
 	}
 
-	if (staleKeys && (app_params.clear_on_gap.int_param != 0)) {
-		hbkeys, hbkerr := kvHandle.GetRange(HB_KEYRANGE_START,HB_KEYRANGE_END)
-		if (hbkerr != nil) {
+	if staleKeys && (app_params.clear_on_gap.int_param != 0) {
+		hbkeys, hbkerr := kvHandle.GetRange(HB_KEYRANGE_START, HB_KEYRANGE_END)
+		if hbkerr != nil {
 			hbtdPrintf("ERROR: Trying to delete old HB keys, can't fetch any keys.")
 			return
 		}
-		for _,kv := range hbkeys {
+		for _, kv := range hbkeys {
 			err := kvHandle.Delete(kv.Key)
-			if (err != nil) {
+			if err != nil {
 				hbtdPrintf("ERROR: Problem trying to delete old HB key %s': %v",
-					kv.Key,err)
+					kv.Key, err)
 			}
 		}
 		hbtdPrintf("INFO: old HB keys cleared.")
@@ -932,7 +928,7 @@ func main() {
 		log.Printf("ERROR: can't get service/host name!  Using 'HBTD'.\n")
 		serviceName = "HBTD"
 	}
-	log.Printf("Service name: '%s'",serviceName)
+	log.Printf("Service name: '%s'", serviceName)
 
 	initAppParams()
 
@@ -971,7 +967,7 @@ func main() {
 
 	openKV()
 
-	//Generate a unique instance key and check for HBTD life keys.  If none, 
+	//Generate a unique instance key and check for HBTD life keys.  If none,
 	//delete stale HB data in KV store.
 
 	instanceKey := createInstanceKey()
@@ -986,7 +982,7 @@ func main() {
 				hbtdPrintf("ERROR: Can't create life key '%s', retrying...",
 					instanceKey)
 			} else {
-				hbtdPrintf("Life key '%s' created.",instanceKey)
+				hbtdPrintf("Life key '%s' created.", instanceKey)
 				break
 			}
 			time.Sleep(2 * time.Second)
@@ -1023,11 +1019,11 @@ func main() {
 
 	routes := generateRoutes()
 	router := newRouter(routes)
-	srv := &http.Server{Addr: ":"+server_url_port, Handler: router,}
+	srv := &http.Server{Addr: ":" + server_url_port, Handler: router}
 
 	//Set up signal handling for graceful kill
 
-	c := make(chan os.Signal,1)
+	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
 	idleConnsClosed := make(chan struct{})
 
@@ -1037,16 +1033,16 @@ func main() {
 
 		//Gracefully shutdown the HTTP server
 		lerr := srv.Shutdown(context.Background())
-		if (lerr != nil) {
-			log.Printf("ERROR: HTTP server shutdown error: %v",lerr)
+		if lerr != nil {
+			log.Printf("ERROR: HTTP server shutdown error: %v", lerr)
 		}
 		close(idleConnsClosed)
 	}()
 
 	log.Printf("INFO: Starting up HTTP server.")
 	srvErr := srv.ListenAndServe()
-	if (srvErr != http.ErrServerClosed) {
-		log.Printf("FATAL: HTTP server ListenandServe failed: %v",srvErr)
+	if srvErr != http.ErrServerClosed {
+		log.Printf("FATAL: HTTP server ListenandServe failed: %v", srvErr)
 	}
 
 	log.Printf("INFO: Server shutdown, waiting for idle connections to close...")
@@ -1055,4 +1051,3 @@ func main() {
 
 	os.Exit(0)
 }
-

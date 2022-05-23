@@ -633,7 +633,7 @@ components:
         Sm_url:
           description: This is the State Manager URL
           type: string
-          default: 'http://localhost:27779/hsm/v1'
+          default: 'http://localhost:27779/hsm/v2'
           example: 'http://cray-smd/v1/State/Components'
         Telemetry_host:
           description: 'Telemetry bus host description (host:port:topic)'

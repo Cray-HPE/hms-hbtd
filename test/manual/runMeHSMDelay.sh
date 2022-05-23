@@ -64,7 +64,7 @@ sleep 2
 
 echo "Starting HBTD..."
 
-./hbtd --debug=3 --sm_url=http://10.0.2.15:27999/hsm/v1 --kv_url="mem:" --use_telemetry=no  > /tmp/hbtd.out 2>&1 &
+./hbtd --debug=3 --sm_url=http://10.0.2.15:27999/hsm/v2 --kv_url="mem:" --use_telemetry=no  > /tmp/hbtd.out 2>&1 &
 
 sleep 5
 
@@ -95,7 +95,7 @@ sleep 5 # T+10
 
 # T+10 no notifications
 
-curl -X PATCH -d '{"ComponentIDs":["PAUSE","20"]}' http://10.0.2.15:27999/hsm/v1/State/Components/BulkStateData
+curl -X PATCH -d '{"ComponentIDs":["PAUSE","20"]}' http://10.0.2.15:27999/hsm/v2/State/Components/BulkStateData
 
 # T+15 Detect 8 HB stopped, warning, errors sending
 # T+20 Re-attempt to send to HSM, will fail
@@ -107,7 +107,7 @@ hb x0c0s0b2n0 1008
 
 # T+21 x0c0s0b2n0 started.
 
-curl -X PATCH -d '{"ComponentIDs":["PAUSE","0"]}' http://10.0.2.15:27999/hsm/v1/State/Components/BulkStateData
+curl -X PATCH -d '{"ComponentIDs":["PAUSE","0"]}' http://10.0.2.15:27999/hsm/v2/State/Components/BulkStateData
 
 # T+25 8 HB restarted, x0c0s0b2n0 started to HSM
 # T+25 Re-send HB changes to HSM, should succeed

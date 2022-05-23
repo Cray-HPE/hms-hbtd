@@ -82,7 +82,7 @@ COPY --from=builder /usr/local/bin/hbtd /usr/local/bin
 ENV DEBUG=0
 ENV ERRTIME=20
 ENV WARNTIME=10
-ENV SM_URL="https://api-gateway.default.svc.cluster.local/apis/smd/hsm/v1"
+ENV SM_URL="https://api-gateway.default.svc.cluster.local/apis/smd/hsm/v2"
 ENV USE_TELEMETRY=1
 ENV TELEMETRY_HOST="cluster-kafka-bootstrap.sma.svc.cluster.local:9092:cray-hmsheartbeat-notifications"
 

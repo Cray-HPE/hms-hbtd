@@ -53,7 +53,7 @@ sleep 2
 
 echo "Starting HBTD..."
 
-./hbtd --debug=3 --sm_url=http://10.0.2.15:27999/hsm/v1 --kv_url="mem:" --use_telemetry=no  > /tmp/hbtd.out 2>&1 &
+./hbtd --debug=3 --sm_url=http://10.0.2.15:27999/hsm/v2 --kv_url="mem:" --use_telemetry=no  > /tmp/hbtd.out 2>&1 &
 
 sleep 5
 
@@ -181,11 +181,11 @@ exit 0
 # Do this by curl-ing a bulk state update with componentID[0] == "STOP"
 # Fix by curl-ing with componentID[0] == "START"
 
-curl -X PATCH -d '{"ComponentIDs":["STOP"]}' http://10.0.2.15:27999/hsm/v1/State/BulkStateData
+curl -X PATCH -d '{"ComponentIDs":["STOP"]}' http://10.0.2.15:27999/hsm/v2/State/BulkStateData
 
 # curl some HBs
 
-curl -X PATCH -d '{"ComponentIDs":["START"]}' http://10.0.2.15:27999/hsm/v1/State/BulkStateData
+curl -X PATCH -d '{"ComponentIDs":["START"]}' http://10.0.2.15:27999/hsm/v2/State/BulkStateData
 
 # Check that desired HBs got through by looking at fake-hsm logs
 
