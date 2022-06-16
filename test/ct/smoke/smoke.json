@@ -1,5 +1,5 @@
 {
-  "smoke_test_name": "HBTD-smoke-tests",
+  "smoke_test_name": "hbtd-smoke-tests",
   "default_base_url": "http://cray-hbtd/",
   "test_paths": [
     {
