@@ -2,3 +2,11 @@ kubernetes/.packaged/
 kubernetes/cray-hms-hbtd/charts/
 
 .idea/
+
+# Prevent certificates from getting checked in
+*.ca
+*.cer
+*.crt
+*.csr
+*.key
+*.pem
