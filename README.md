@@ -99,9 +99,11 @@ docker run -p 28500:28500 --name hbtd cray/hbtd:test
 
 ### hbtd CT Testing
 
-This repository builds and publishes hms-hbtd-ct-test RPMs along with the service itself containing tests that verify hbtd on the
-NCNs of live Shasta systems. The tests require the hms-ct-test-base RPM to also be installed on the NCNs in order to execute.
-The version of the test RPM installed on the NCNs should always match the version of hbtd deployed on the system.
+In addition to the service itself, this repository builds and publishes cray-hbtd-test images
+containing tests that verify HBTD on live Shasta systems. The tests are invoked via helm test
+as part of the Continuous Test (CT) framework during CSM installs and upgrades. The version of
+the cray-hbtd-test image (vX.Y.Z) should match the version of the cray-hbtd image being tested,
+both of which are specified in the helm chart for the service.
 
 ## Feature Map
 
@@ -111,7 +113,6 @@ The version of the test RPM installed on the NCNs should always match the versio
 | /v1/params | /v1/params | - | 
 | - | Ability to query service health | - |
 | - | Ability to dump service internals | - |
-
 
 ## Current Features
 
