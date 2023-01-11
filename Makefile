@@ -41,4 +41,4 @@ ct:
 	./runCT.sh
 
 ct_image:
-	docker build --no-cache -f test/ct/Dockerfile test/ct/ --tag hms-sls-test:${VERSION}
+	docker build --no-cache -f test/ct/Dockerfile test/ct/ --tag hms-hbtd-test:${VERSION}
