@@ -26,7 +26,7 @@ set -ex
 
 GITSHA=$(git rev-parse HEAD)
 TIMESTAMP=$(date +"%Y-%m-%dT%H-%M-%SZ")
-IMAGE="cray/hms-hmi-service-coverage"
+IMAGE="cray/hms-hbtd-coverage"
 # image names must be lower case
 UNIQUE_TAG=$(echo ${IMAGE}_${GITSHA}_${TIMESTAMP} | tr '[:upper:]' '[:lower:]')
 # export NO_CACHE=--no-cache # this will cause docker build to run with no cache; off by default for local builds, enabled in jenkinsfile

@@ -21,7 +21,7 @@
 # OTHER DEALINGS IN THE SOFTWARE.
 
 # Service
-NAME ?= hms-hmi-service
+NAME ?= hms-hbtd
 VERSION ?= $(shell cat .version)
 
 

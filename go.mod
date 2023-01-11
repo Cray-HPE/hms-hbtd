@@ -1,4 +1,4 @@
-module github.com/Cray-HPE/hms-hmi-service
+module github.com/Cray-HPE/hms-hbtd
 
 go 1.16
 
