@@ -27,9 +27,10 @@ VERSION ?= $(shell cat .version)
 
 all : image unittest ct snyk ct_image
 
+#	this is needed when you have an arm processor.  The MUSL stuff in go build are c compilations for amd architecture.
 image:
 	docker buildx build --platform linux/amd64 ${NO_CACHE} --pull ${DOCKER_ARGS} --tag '${NAME}:${VERSION}' .
-	#this is needed when you have an arm processor.  The MUSL stuff in go build are c compilations for amd architecture.
+
 unittest:
 	./runUnitTest.sh
 
