@@ -20,7 +20,7 @@
 # ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 # OTHER DEALINGS IN THE SOFTWARE.
 
-# Dockerfile for building hms-hmi-service.
+# Dockerfile for building hms-hbtd.
 
 ### build-base stage ###
 # Build base just has the packages installed we need.
@@ -37,28 +37,28 @@ FROM build-base AS base
 RUN go env -w GO111MODULE=auto
 
 # Copy all the necessary files to the image.
-COPY cmd $GOPATH/src/github.com/Cray-HPE/hms-hmi-service/cmd
-COPY vendor $GOPATH/src/github.com/Cray-HPE/hms-hmi-service/vendor
+COPY cmd $GOPATH/src/github.com/Cray-HPE/hms-hbtd/cmd
+COPY vendor $GOPATH/src/github.com/Cray-HPE/hms-hbtd/vendor
 
 
 ### UNIT TEST Stage ###
 FROM base AS testing
 
 # Run unit tests...
-CMD ["sh", "-c", "set -ex && go test -v -tags musl github.com/Cray-HPE/hms-hmi-service/cmd/hmi-service"]
+CMD ["sh", "-c", "set -ex && go test -v -tags musl github.com/Cray-HPE/hms-hbtd/cmd/hbtd"]
 
 
 ### COVERAGE Stage ###
 FROM base AS coverage
 
 # Run test coverage...
-CMD ["sh", "-c", "set -ex && go test -tags musl -cover -v github.com/Cray-HPE/hms-hmi-service/cmd/hmi-service"]
+CMD ["sh", "-c", "set -ex && go test -tags musl -cover -v github.com/Cray-HPE/hms-hbtd/cmd/hbtd"]
 
 
 ### Build Stage ###
 FROM base AS builder
 
-RUN set -ex && go build -v -tags musl -i -o /usr/local/bin/hbtd github.com/Cray-HPE/hms-hmi-service/cmd/hmi-service
+RUN set -ex && go build -v -tags musl -i -o /usr/local/bin/hbtd github.com/Cray-HPE/hms-hbtd/cmd/hbtd
 
 
 ### Final Stage ###
@@ -71,9 +71,9 @@ RUN set -ex \
     && apk -U upgrade \
     && apk add --no-cache curl
 
-# Copy the final binary.  To use hmi-service as the daemon name rather
+# Copy the final binary.  To use hbtd as the daemon name rather
 # than 'hbtd':
-#   COPY --from=builder go/hmi-service /usr/local/bin
+#   COPY --from=builder go/hbtd /usr/local/bin
 
 COPY --from=builder /usr/local/bin/hbtd /usr/local/bin
 
