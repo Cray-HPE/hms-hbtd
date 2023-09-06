@@ -39,7 +39,7 @@ _hbtd_'s RESTful API is as follows:
     GET or PATCH an hbdt operational parameter
 ```
 
-See https://stash.us.cray.com/projects/HMS/repos/hms-hmi/browse/api/swagger.yaml for details on the _hbtd_ RESTful API payloads and return values.
+See [api/swagger.yaml](api/swagger.yaml) for details on the _hbtd_ RESTful API payloads and return values.
 
 ## hbtd Command Line
 
