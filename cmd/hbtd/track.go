@@ -27,7 +27,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/Cray-HPE/hms-base"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -37,7 +36,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Cray-HPE/hms-hmetcd"
+	base "github.com/Cray-HPE/hms-base/v2"
+	"github.com/Cray-HPE/hms-xname/xnametypes"
+
+	hmetcd "github.com/Cray-HPE/hms-hmetcd"
 	"github.com/gorilla/mux"
 )
 
@@ -973,7 +975,7 @@ func hbRcv(w http.ResponseWriter, r *http.Request) {
 
 	//Check to be sure that certain fields' values are valid.
 
-	if base.GetHMSType(jdata.Component) == base.HMSTypeInvalid {
+	if xnametypes.GetHMSType(jdata.Component) == xnametypes.HMSTypeInvalid {
 		hbtdPrintf("Invalid XName in heartbeat JSON: %s\n", jdata.Component)
 		pdet := base.NewProblemDetails("about:blank",
 			"Invalid Request",
@@ -1015,7 +1017,7 @@ func hbRcvXName(w http.ResponseWriter, r *http.Request) {
 	if xname == "" {
 		//Should NOT happen, but if so, grab the end of the URL
 		toks := strings.Split(r.URL.Path, "/")
-		xn := base.NormalizeHMSCompID(toks[len(toks)-1])
+		xn := xnametypes.NormalizeHMSCompID(toks[len(toks)-1])
 		if xn == "" {
 			//Enforce valid XName
 			hbtdPrintf("ERROR: request is not a POST.\n")
@@ -1321,7 +1323,7 @@ func hbStateSingle(w http.ResponseWriter, r *http.Request) {
 	var rspSingle hbSingleStateRsp
 
 	vars := mux.Vars(r)
-	targ := base.NormalizeHMSCompID(vars["xname"])
+	targ := xnametypes.NormalizeHMSCompID(vars["xname"])
 	errinst := URL_HB_STATE + "/" + targ
 	now := time.Now().Unix()
 

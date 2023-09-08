@@ -29,7 +29,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Cray-HPE/hms-base"
+	"github.com/Cray-HPE/hms-base/v2"
 )
 
 // HealthResponse - used to report service health stats

@@ -27,9 +27,6 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"github.com/Cray-HPE/hms-base"
-	"github.com/Cray-HPE/hms-hmetcd"
-	"github.com/gorilla/mux"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -40,6 +37,10 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	base "github.com/Cray-HPE/hms-base/v2"
+	hmetcd "github.com/Cray-HPE/hms-hmetcd"
+	"github.com/gorilla/mux"
 )
 
 var SMRMutex sync.Mutex
@@ -517,6 +518,58 @@ func hb_cmp(t *testing.T, cmp string, ts string, status string) {
 	}
 }
 
+func heartbeatBody(xname, status, timestamp string) *bytes.Buffer {
+	body := `{"Component":"` + xname +
+		`","Hostname":"` + "nid0001.us.cray.com" +
+		`","NID":"` + "0001" +
+		`","Status":"` + status +
+		`","Timestamp":"` + timestamp + `"}`
+	return bytes.NewBufferString(body)
+}
+
+func postHeartbeat(t *testing.T, requestBody *bytes.Buffer, expectedReturnCode int) {
+	url := "http://localhost:8080/hmi/v1/heartbeat"
+	req, err := http.NewRequest("POST", url, requestBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(hbRcv)
+	handler.ServeHTTP(rr, req)
+
+	// Check the return code
+	if rr.Code != expectedReturnCode {
+		t.Errorf("Wrong http code: expected: %v, actual: %v, url: %s, requestBody: %v", expectedReturnCode, rr.Code, url, requestBody)
+	}
+}
+
+func heartbeatToXnameBody(status, timestamp string) *bytes.Buffer {
+	body := `{"Status":"` + status + `","Timestamp":"` + timestamp + `"}`
+	return bytes.NewBufferString(body)
+}
+
+func postHeartbeatToXname(t *testing.T, xname string, requestBody *bytes.Buffer, expectedReturnCode int) {
+	url := "http://localhost:8080/hmi/v1/heartbeat/" + xname
+	req, err := http.NewRequest("POST", url, requestBody)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Set up to grab the "responses"
+	rr := httptest.NewRecorder()
+	handlerXName := http.HandlerFunc(hbRcvXName)
+
+	// Mock up the second operation
+	handlerXName.ServeHTTP(rr, req)
+
+	// Check the return code
+	if rr.Code != expectedReturnCode {
+		t.Errorf("Wrong http code: expected: %v, actual: %v, url: %s, requestBody: %v", expectedReturnCode, rr.Code, url, requestBody)
+	}
+}
+
 // Test entry point for hb_rcv(), which is the HB HTTP request handler.
 // We will fake out an HTTP request object and record the response.
 // We will also examine the newly-created components in the HB tracking
@@ -535,50 +588,29 @@ func TestHb_rcv(t *testing.T) {
 	}
 
 	//Slop together JSON payloads for 2 heartbeating nodes
-
-	req1_hb := bytes.NewBufferString(`{"Component":"x1c2s2b0n3","Hostname":"nid0001.us.cray.com","NID":"0001","Status":"OK","Timestamp":"Jan 1, 0000"}`)
-	req2_hb := bytes.NewBufferString(`{"Status":"OK","Timestamp":"Jan 2, 1000"}`)
-
-	// Create 2 fake HTTP POSTs with the HB data in it
-	req1, err1 := http.NewRequest("POST", "http://localhost:8080/hmi/v1/heartbeat", req1_hb)
-
-	if err1 != nil {
-		t.Fatal(err1)
+	xnames := []string{"x1c2s2b0n3", "x1c2s2b0n3v4"}
+	timestamps := []string{"Jan 1, 0000", "Jan 2, 0000"}
+	for i := range xnames {
+		postHeartbeat(t,
+			heartbeatBody(xnames[i], "OK", timestamps[i]),
+			http.StatusOK)
 	}
 
-	req2, err2 := http.NewRequest("POST", "http://localhost:8080/hmi/v1/heartbeat/x2c3s4b0n5", req2_hb)
-
-	if err2 != nil {
-		t.Fatal(err2)
+	xnames2 := []string{"x1c2s2b0n4", "x1c2s2b0n4v5"}
+	timestamps2 := []string{"Jan 3, 0000", "Jan 4, 0000"}
+	for i := range xnames2 {
+		postHeartbeatToXname(t,
+			xnames2[i],
+			heartbeatToXnameBody("OK", timestamps2[i]),
+			http.StatusOK)
 	}
 
-	// Set up to grab the "responses"
-	rr := httptest.NewRecorder()
-	handler := http.HandlerFunc(hbRcv)
-	handlerXName := http.HandlerFunc(hbRcvXName)
-
-	// Mock up the first operation
-	handler.ServeHTTP(rr, req1)
-
-	// Check the return code
-	if rr.Code != http.StatusOK {
-		t.Errorf("HTTP handler returned bad error code, got %v, want %v",
-			rr.Code, http.StatusOK)
+	for i := range xnames {
+		hb_cmp(t, xnames[i], timestamps[i], "OK")
 	}
-
-	// Mock up the second operation
-	handlerXName.ServeHTTP(rr, req2)
-
-	// Check the return code
-	if rr.Code != http.StatusOK {
-		t.Errorf("HTTP handler returned bad error code, got %v, want %v",
-			rr.Code, http.StatusOK)
+	for i := range xnames2 {
+		hb_cmp(t, xnames2[i], timestamps2[i], "OK")
 	}
-
-	//Now check the hbmap to see if it has entries for both nodes
-
-	hb_cmp(t, "x1c2s2b0n3", "Jan 1, 0000", "OK")
-	hb_cmp(t, "x2c3s4b0n5", "Jan 2, 1000", "OK")
 
 	//Now check some error conditions.  First, a non-POST request
 
@@ -599,7 +631,7 @@ func TestHb_rcv(t *testing.T) {
 	}
 
 	//Next we'll give it JSON with an invalid data type
-
+	// the Component is an int instead of a string
 	req_e1_data := bytes.NewBufferString(`{"Component":1234,"Hostname":"nid0001.us.cray.com","NID":"0001","Status":"OK","Timestamp":"Jan 1, 0000"}`)
 	req_e1, err_e1 = http.NewRequest("POST", "http://localhost:8080/hmi/v1/heartbeat", req_e1_data)
 
@@ -636,21 +668,7 @@ func TestHb_rcv(t *testing.T) {
 
 	//Send a HB with an invalid component XName
 
-	req_e1_data = bytes.NewBufferString(`{"Component":"xxyyzz","Hostname":"nid0001.us.cray.com","NID":"0001","Status":"OK","Timestamp":"Jan 1, 0000"}`)
-	req_e1, err_e1 = http.NewRequest("POST", "http://localhost:8080/hmi/v1/heartbeat", req_e1_data)
-
-	if err_e1 != nil {
-		t.Fatal(err_e1)
-	}
-	rr_e1 = httptest.NewRecorder()
-	handler_e1 = http.HandlerFunc(hbRcv)
-	handler_e1.ServeHTTP(rr_e1, req_e1)
-
-	// Check the return code
-	if rr_e1.Code != http.StatusBadRequest {
-		t.Errorf("HTTP handler returned bad error code, got %v, want %v",
-			rr_e1.Code, http.StatusBadRequest)
-	}
+	postHeartbeat(t, heartbeatBody("xxyyzz", "OK", "Jan 1, 0000"), http.StatusBadRequest)
 
 	//Send a HB with a NID that's numerically invalid
 
@@ -672,21 +690,7 @@ func TestHb_rcv(t *testing.T) {
 
 	//Send a HB to an existing key
 
-	req_e1_data = bytes.NewBufferString(`{"Component":"x1c2s2b0n3","Hostname":"nid0001.us.cray.com","NID":"0001","Status":"OK","Timestamp":"Jan 1, 0000"}`)
-	req_e1, err_e1 = http.NewRequest("POST", "http://localhost:8080/hmi/v1/heartbeat", req_e1_data)
-
-	if err_e1 != nil {
-		t.Fatal(err_e1)
-	}
-	rr_e1 = httptest.NewRecorder()
-	handler_e1 = http.HandlerFunc(hbRcv)
-	handler_e1.ServeHTTP(rr_e1, req_e1)
-
-	// Check the return code
-	if rr_e1.Code != http.StatusOK {
-		t.Errorf("HTTP handler returned bad error code, got %v, want %v",
-			rr_e1.Code, http.StatusOK)
-	}
+	postHeartbeat(t, heartbeatBody(xnames[0], "OK", "Jan 1, 0000"), http.StatusOK)
 
 	time.Sleep(1 * time.Second)
 	t.Logf("  ==> FINISHED HEARTBEAT HTTP OPERATIONS TEST\n")
