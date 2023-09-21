@@ -1,6 +1,6 @@
 // MIT License
 //
-// (C) Copyright [2020-2021] Hewlett Packard Enterprise Development LP
+// (C) Copyright [2020-2021,2023] Hewlett Packard Enterprise Development LP
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -20,14 +20,13 @@
 // ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 // OTHER DEALINGS IN THE SOFTWARE.
 
-
 package main
 
 import (
-	"fmt"
-	"crypto/tls"
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -212,7 +211,7 @@ func TestHealth(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ERROR unmarshalling GET response body:%s", err.Error())
 	}
-	kp = fmt.Sprintf("Initialization key present: %s",HBTD_HEALTH_OK)
+	kp = fmt.Sprintf("Initialization key present: %s", HBTD_HEALTH_OK)
 	if stats.KvStoreStatus != kp {
 		t.Fatal("Expected KV Store initialized")
 	}
@@ -236,7 +235,7 @@ func TestHSMReadies(t *testing.T) {
 	t.Logf("**** Testing HSM readiness ****")
 	go checkHSM()
 	time.Sleep(10 * time.Second)
-	if (hsmReady == true) {
+	if hsmReady == true {
 		t.Errorf("HSM shows ready, should not be.")
 	}
 	stopCheckHSM = true
