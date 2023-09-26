@@ -1,17 +1,17 @@
 // MIT License
-// 
-// (C) Copyright [2020-2021] Hewlett Packard Enterprise Development LP
-// 
+//
+// (C) Copyright [2020-2021,2023] Hewlett Packard Enterprise Development LP
+//
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
 // to deal in the Software without restriction, including without limitation
 // the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the
 // Software is furnished to do so, subject to the following conditions:
-// 
+//
 // The above copyright notice and this permission notice shall be included
 // in all copies or substantial portions of the Software.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
@@ -19,8 +19,6 @@
 // OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 // ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 // OTHER DEALINGS IN THE SOFTWARE.
-
-
 
 package main
 
@@ -31,7 +29,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Cray-HPE/hms-base"
+	"github.com/Cray-HPE/hms-base/v2"
 )
 
 // HealthResponse - used to report service health stats
@@ -44,13 +42,12 @@ type HealthResponse struct {
 var hsmReady = false
 var stopCheckHSM = false
 
-
 // Periodically check on the availability of HSM.
 
 func checkHSM() {
 	var offBase int64
 
-	if (app_params.nosm.int_param != 0) {
+	if app_params.nosm.int_param != 0 {
 		return
 	}
 
@@ -59,33 +56,33 @@ func checkHSM() {
 	offBase = time.Now().Unix()
 
 	for {
-		if (stopCheckHSM) {
+		if stopCheckHSM {
 			return
 		}
 		lrdy := false
-		req,err := http.NewRequest("GET",url,nil)
-		if (err != nil) {
-			hbtdPrintf("ERROR: HSM check, can't create request: %v",err)
+		req, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			hbtdPrintf("ERROR: HSM check, can't create request: %v", err)
 		} else {
-			base.SetHTTPUserAgent(req,serviceName)
-			rsp,rerr := htrans.client.Do(req)
-			if (rerr == nil) {
-				if (rsp.Body != nil) {
+			base.SetHTTPUserAgent(req, serviceName)
+			rsp, rerr := htrans.client.Do(req)
+			if rerr == nil {
+				if rsp.Body != nil {
 					rsp.Body.Close()
 				}
-				if (rsp.StatusCode == http.StatusOK) {
+				if rsp.StatusCode == http.StatusOK {
 					lrdy = true
 				}
 			}
 		}
 
 		hsmReady = lrdy
-		if (!lrdy) {
+		if !lrdy {
 			tdiff := time.Now().Unix() - offBase
-			hbtdPrintf("HSM is not responsive (%d seconds).",tdiff)
+			hbtdPrintf("HSM is not responsive (%d seconds).", tdiff)
 		} else {
 			offBase = time.Now().Unix()
-			if (!pstat) {
+			if !pstat {
 				offBase = time.Now().Unix()
 				hbtdPrintf("HSM is responsive.")
 			}
@@ -96,17 +93,17 @@ func checkHSM() {
 }
 
 //Wait until HSM is ready.  NOTE: this may be temporary.  There needs to
-//be improvements on how to handle HSM coming and going.  Once that is 
+//be improvements on how to handle HSM coming and going.  Once that is
 //done this may be able to be removed.
 
 func waitForHSM() {
-	if (app_params.nosm.int_param != 0) {
+	if app_params.nosm.int_param != 0 {
 		return
 	}
 
 	hbtdPrintf("Waiting for HSM to be responsive...")
 	for {
-		if (hsmReady) {
+		if hsmReady {
 			return
 		}
 
