@@ -49,8 +49,8 @@ echo "Starting containers..."
 docker compose build --no-cache
 docker compose up -d cray-hbtd
 docker compose up -d ct-tests-functional-wait-for-smd
-docker wait ${COMPOSE_PROJECT_NAME}_ct-tests-functional-wait-for-smd_1
-docker logs ${COMPOSE_PROJECT_NAME}_ct-tests-functional-wait-for-smd_1
+docker wait ${COMPOSE_PROJECT_NAME}-ct-tests-functional-wait-for-smd-1
+docker logs ${COMPOSE_PROJECT_NAME}-ct-tests-functional-wait-for-smd-1
 docker compose up --exit-code-from ct-tests-smoke ct-tests-smoke
 test_result=$?
 echo "Cleaning up containers..."
