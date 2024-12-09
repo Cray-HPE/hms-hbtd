@@ -2,6 +2,7 @@ kubernetes/.packaged/
 kubernetes/cray-hms-hbtd/charts/
 
 .idea/
+*.swp
 
 # Prevent certificates from getting checked in
 *.ca
