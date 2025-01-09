@@ -1,0 +1,98 @@
+# MIT License
+#
+# (C) Copyright [2018-2022,2024-2025] Hewlett Packard Enterprise Development LP
+#
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included
+# in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+# THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+# OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+# ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+# OTHER DEALINGS IN THE SOFTWARE.
+
+# Dockerfile for building hms-hbtd with pprof support.
+# The only difference from primary dockerfile is building with the pprof tag
+
+### build-base stage ###
+# Build base just has the packages installed we need.
+FROM artifactory.algol60.net/docker.io/library/golang:1.23-alpine AS build-base
+
+RUN set -ex \
+    && apk -U upgrade \
+    && apk add build-base
+
+### base stage ###
+# Base copies in the files we need to test/build.
+FROM build-base AS base
+
+RUN go env -w GO111MODULE=auto
+
+# Copy all the necessary files to the image.
+COPY cmd $GOPATH/src/github.com/Cray-HPE/hms-hbtd/cmd
+COPY vendor $GOPATH/src/github.com/Cray-HPE/hms-hbtd/vendor
+
+
+### UNIT TEST Stage ###
+FROM base AS testing
+
+# Run unit tests...
+CMD ["sh", "-c", "set -ex && go test -v -tags musl github.com/Cray-HPE/hms-hbtd/cmd/hbtd"]
+
+
+### COVERAGE Stage ###
+FROM base AS coverage
+
+# Run test coverage...
+CMD ["sh", "-c", "set -ex && go test -tags musl -cover -v github.com/Cray-HPE/hms-hbtd/cmd/hbtd"]
+
+
+### Build Stage ###
+FROM base AS builder
+
+RUN set -ex && go build -v -tags "musl pprof" -o /usr/local/bin/hbtd github.com/Cray-HPE/hms-hbtd/cmd/hbtd
+
+### Final Stage ###
+FROM artifactory.algol60.net/csm-docker/stable/docker.io/library/alpine:3.15
+LABEL maintainer="Hewlett Packard Enterprise"
+EXPOSE 28500
+STOPSIGNAL SIGTERM
+
+RUN set -ex \
+    && apk -U upgrade \
+    && apk add --no-cache curl
+
+# Copy the final binary.  To use hbtd as the daemon name rather
+# than 'hbtd':
+#   COPY --from=builder go/hbtd /usr/local/bin
+
+COPY --from=builder /usr/local/bin/hbtd /usr/local/bin
+
+# Run the daemon
+
+ENV DEBUG=0
+ENV ERRTIME=20
+ENV WARNTIME=10
+ENV SM_URL="https://api-gateway.default.svc.cluster.local/apis/smd/hsm/v2"
+ENV USE_TELEMETRY=1
+ENV TELEMETRY_HOST="cluster-kafka-bootstrap.sma.svc.cluster.local:9092:cray-hmsheartbeat-notifications"
+
+# If KV_URL is set to empty the Go code will determine the URL from env vars.
+# This is due to the fact that in Dockerfiles you CANNOT create an env var
+# using other env vars.
+
+ENV KV_URL=
+
+# nobody 65534:65534
+USER 65534:65534
+
+CMD ["sh", "-c", "hbtd --debug=$DEBUG --errtime=$ERRTIME --warntime=$WARNTIME --sm_url=$SM_URL --kv_url=$KV_URL --use_telemetry=$USE_TELEMETRY --telemetry_host=$TELEMETRY_HOST" ]
