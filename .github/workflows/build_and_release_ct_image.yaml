@@ -11,4 +11,5 @@ jobs:
       docker-build-file: test/ct/Dockerfile #the tests/ct/Dockerfile is what we want!
       docker-build-context: test/ct
       enable-pr-comment: true
+      snyk-severity: critical
     secrets: inherit
