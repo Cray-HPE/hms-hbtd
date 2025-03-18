@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.23.0] - 2025-03-20
+
+### Security
+
+- Updated image and module dependencies for security updates
+- Updated to Go v1.24
+- Various code changes to accomodate module updates
+- Added image-pprof Makefile support
+- Resolved build warnings in Dockerfiles and docker compose files
+- Internal tracking ticket: CASMHMS-6414
+
 ## [1.22.0] - 2025-01-08
 
 ### Added

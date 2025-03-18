@@ -1,6 +1,6 @@
 # MIT License
 #
-# (C) Copyright [2018-2022,2024] Hewlett Packard Enterprise Development LP
+# (C) Copyright [2018-2022,2024-2025] Hewlett Packard Enterprise Development LP
 #
 # Permission is hereby granted, free of charge, to any person obtaining a
 # copy of this software and associated documentation files (the "Software"),
@@ -24,7 +24,7 @@
 
 ### build-base stage ###
 # Build base just has the packages installed we need.
-FROM artifactory.algol60.net/docker.io/library/golang:1.23-alpine AS build-base
+FROM artifactory.algol60.net/docker.io/library/golang:1.24-alpine AS build-base
 
 RUN set -ex \
     && apk -U upgrade \
@@ -62,7 +62,7 @@ RUN set -ex && go build -v -tags musl -o /usr/local/bin/hbtd github.com/Cray-HPE
 
 
 ### Final Stage ###
-FROM artifactory.algol60.net/csm-docker/stable/docker.io/library/alpine:3.15
+FROM artifactory.algol60.net/csm-docker/stable/docker.io/library/alpine:3.21
 LABEL maintainer="Hewlett Packard Enterprise"
 EXPOSE 28500
 STOPSIGNAL SIGTERM

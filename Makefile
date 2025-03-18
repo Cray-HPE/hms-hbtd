@@ -1,6 +1,6 @@
 # MIT License
 #
-# (C) Copyright [2021-2022] Hewlett Packard Enterprise Development LP
+# (C) Copyright [2021-2022,2025] Hewlett Packard Enterprise Development LP
 #
 # Permission is hereby granted, free of charge, to any person obtaining a
 # copy of this software and associated documentation files (the "Software"),
@@ -25,11 +25,14 @@ NAME ?= hms-hbtd
 VERSION ?= $(shell cat .version)
 
 
-all : image unittest ct snyk ct_image
+all : image image-pprof unittest ct snyk ct_image
 
 #	this is needed when you have an arm processor.  The MUSL stuff in go build are c compilations for amd architecture.
 image:
-	docker buildx build --platform linux/amd64 ${NO_CACHE} --pull ${DOCKER_ARGS} --tag '${NAME}:${VERSION}' .
+	docker buildx build --platform linux/amd64 ${NO_CACHE} --pull ${DOCKER_ARGS} --tag '${NAME}:${VERSION}' -f Dockerfile .
+
+image-pprof:
+	docker buildx build --platform linux/amd64 ${NO_CACHE} --pull ${DOCKER_ARGS} --tag '${NAME}-pprof:${VERSION}' -f Dockerfile.pprof .
 
 unittest:
 	./runUnitTest.sh
