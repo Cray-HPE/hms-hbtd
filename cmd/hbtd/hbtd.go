@@ -52,9 +52,9 @@ import (
 	"syscall"
 	"time"
 
-	base "github.com/Cray-HPE/hms-base/v2"
-	hmetcd "github.com/Cray-HPE/hms-hmetcd"
-	msgbus "github.com/Cray-HPE/hms-msgbus"
+	"github.com/Cray-HPE/hms-base/v2"
+	"github.com/Cray-HPE/hms-hmetcd"
+	"github.com/Cray-HPE/hms-msgbus"
 )
 
 /////////////////////////////////////////////////////////////////////////////
