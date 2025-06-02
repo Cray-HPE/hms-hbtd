@@ -1,6 +1,6 @@
 // MIT License
 //
-// (C) Copyright [2018-2021,2023] Hewlett Packard Enterprise Development LP
+// (C) Copyright [2018-2021,2023,2025] Hewlett Packard Enterprise Development LP
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -220,12 +220,12 @@ func send_sm_patch(smjinfo *smjbulk_v1) {
 	base.SetHTTPUserAgent(req, serviceName)
 
 	rsp, err := htrans.client.Do(req)
+	defer base.DrainAndCloseResponseBody(rsp)
 
 	if err != nil {
 		hbtdPrintln("ERROR sending PATCH to SM:", err)
 		return
 	} else {
-		defer rsp.Body.Close()
 		_, _ = ioutil.ReadAll(rsp.Body)
 		if (rsp.StatusCode == http.StatusOK) ||
 			(rsp.StatusCode == http.StatusNoContent) ||
@@ -887,6 +887,8 @@ func updateHB(errinst, xname, timestamp, status string, w http.ResponseWriter) {
 /////////////////////////////////////////////////////////////////////////////
 
 func hbRcv(w http.ResponseWriter, r *http.Request) {
+	defer base.DrainAndCloseRequestBody(r)
+
 	errinst := URL_HEARTBEAT
 
 	if r.Method != "POST" {
@@ -1012,6 +1014,8 @@ func hbRcv(w http.ResponseWriter, r *http.Request) {
 }
 
 func hbRcvXName(w http.ResponseWriter, r *http.Request) {
+	defer base.DrainAndCloseRequestBody(r)
+
 	errinst := URL_HEARTBEAT
 	xname := mux.Vars(r)["xname"]
 	if xname == "" {
@@ -1123,6 +1127,8 @@ func hbRcvXName(w http.ResponseWriter, r *http.Request) {
 /////////////////////////////////////////////////////////////////////////////
 
 func paramsIO(w http.ResponseWriter, r *http.Request) {
+	defer base.DrainAndCloseRequestBody(r)
+
 	var rparams []byte
 	errinst := URL_PARAMS
 
@@ -1263,6 +1269,8 @@ func hbStates(w http.ResponseWriter, r *http.Request) {
 	var rspData hbStatesRsp
 	var rspSingle hbSingleStateRsp
 
+	defer base.DrainAndCloseRequestBody(r)
+
 	errinst := URL_HB_STATES
 	body, err := ioutil.ReadAll(r.Body)
 
@@ -1321,6 +1329,8 @@ func hbStates(w http.ResponseWriter, r *http.Request) {
 
 func hbStateSingle(w http.ResponseWriter, r *http.Request) {
 	var rspSingle hbSingleStateRsp
+
+	defer base.DrainAndCloseRequestBody(r)
 
 	vars := mux.Vars(r)
 	targ := xnametypes.NormalizeHMSCompID(vars["xname"])

@@ -1,6 +1,6 @@
 // MIT License
 //
-// (C) Copyright [2020-2021,2023] Hewlett Packard Enterprise Development LP
+// (C) Copyright [2020-2021,2023,2025] Hewlett Packard Enterprise Development LP
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -29,7 +29,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Cray-HPE/hms-base/v2"
+	base "github.com/Cray-HPE/hms-base/v2"
 )
 
 // HealthResponse - used to report service health stats
@@ -66,10 +66,8 @@ func checkHSM() {
 		} else {
 			base.SetHTTPUserAgent(req, serviceName)
 			rsp, rerr := htrans.client.Do(req)
+			base.DrainAndCloseResponseBody(rsp)
 			if rerr == nil {
-				if rsp.Body != nil {
-					rsp.Body.Close()
-				}
 				if rsp.StatusCode == http.StatusOK {
 					lrdy = true
 				}
@@ -117,6 +115,8 @@ func doHealth(w http.ResponseWriter, r *http.Request) {
 	//  find out what is going on with the system.  This should return
 	//  information in a human-readable format that will help to
 	//  determine the state of this service.
+
+	defer base.DrainAndCloseRequestBody(r)
 
 	// only allow 'GET' calls
 	errinst := "/" + URL_HEALTH
@@ -194,6 +194,8 @@ func doReadiness(w http.ResponseWriter, r *http.Request) {
 	//  will be killed and re-started.  Only fail this if restarting
 	//  this service is likely to fix the problem.
 
+	defer base.DrainAndCloseRequestBody(r)
+
 	// only allow 'GET' calls
 	errinst := "/" + URL_READINESS
 	if r.Method != http.MethodGet {
@@ -244,6 +246,8 @@ func doLiveness(w http.ResponseWriter, r *http.Request) {
 	// NOTE: this is coded in accordance with kubernetes best practices
 	//  for liveness/readiness checks.  This function should only be
 	//  used to indicate the server is still alive and processing requests.
+
+	defer base.DrainAndCloseRequestBody(r)
 
 	// only allow 'GET' calls
 	errinst := "/" + URL_LIVENESS
