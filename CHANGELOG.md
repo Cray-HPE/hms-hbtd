@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Updated
 
 - Updated image and module dependencies
+	- hms-base v2.3.0
+	- hms-hmetcd v1.13.0
+	- hms-msgbus v1.13.1
 - Explicitly closed all request and response bodies using hms-base functions
 - Fixed bug with jq use in runSnyk.sh
 - Internal tracking ticket: CASMHMS-6400
