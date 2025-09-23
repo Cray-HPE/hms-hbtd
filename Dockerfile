@@ -62,7 +62,7 @@ RUN set -ex && go build -v -tags musl -o /usr/local/bin/hbtd github.com/Cray-HPE
 
 
 ### Final Stage ###
-FROM artifactory.algol60.net/csm-docker/stable/docker.io/library/alpine:3.21
+FROM artifactory.algol60.net/csm-docker/stable/docker.io/library/alpine:3.22
 LABEL maintainer="Hewlett Packard Enterprise"
 EXPOSE 28500
 STOPSIGNAL SIGTERM
